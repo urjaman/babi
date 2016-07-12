@@ -24,3 +24,7 @@ style CLI.
 
 Kilo was written by Salvatore Sanfilippo aka antirez and is released
 under the BSD 2 clause license.
+
+## Install
+
+    curl -L https://raw.githubusercontent.com/SegFaulty/kilo/master/install.sh | /bin/bash
