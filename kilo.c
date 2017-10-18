@@ -89,10 +89,6 @@ typedef struct erow {
                            check. */
 } erow;
 
-typedef struct hlcolor {
-    int r,g,b;
-} hlcolor;
-
 struct editorConfig {
     int cx,cy;  /* Cursor x and y position in characters */
     int rowoff;     /* Offset of row displayed. */
@@ -385,12 +381,12 @@ failed:
 }
 
 void screenSetDirty(int start, int to_end) {
-	/* Filter out trying to dirty areas outside screen. */
-	if (start < 0) return;
-	if (start >= E.screenrows) return;
-	E.scr_is_dirty = 1;
-	int end = to_end ? E.screenrows-1 : start;
-	memset(E.screendirty+start, 1, (end-start)+1);
+    /* Filter out trying to dirty areas outside screen. */
+    if (start < 0) return;
+    if (start >= E.screenrows) return;
+    E.scr_is_dirty = 1;
+    int end = to_end ? E.screenrows-1 : start;
+    memset(E.screendirty+start, 1, (end-start)+1);
 }
 
 /* ====================== Syntax highlight color scheme  ==================== */
@@ -936,6 +932,10 @@ void editorRefreshScreen(void) {
     erow *r;
     char buf[32];
     struct abuf ab; abInit(&ab);
+    int msglen = strlen(E.statusmsg);
+    int show_statusmsg = (time(NULL)-E.statusmsg_time < 5);
+
+    if ((msglen)&&(!show_statusmsg)) E.scr_is_dirty = 1; /* Hide message. */
 
     if (E.scr_is_dirty) {
         abAppend(&ab,"\x1b[?25l\x1b[H",6+3); /* Hide cursor and Go home */
@@ -1027,9 +1027,13 @@ void editorRefreshScreen(void) {
 
         /* Second row depends on E.statusmsg and the status message update time. */
         abAppend(&ab,"\x1b[0m\r\n\x1b[0K",6+4);
-        int msglen = strlen(E.statusmsg);
-        if (msglen && time(NULL)-E.statusmsg_time < 5)
-            abAppend(&ab,E.statusmsg,msglen <= E.screencols ? msglen : E.screencols);
+        if (msglen) {
+            if (show_statusmsg) {
+                abAppend(&ab,E.statusmsg,msglen <= E.screencols ? msglen : E.screencols);
+            } else {
+                E.statusmsg[0] = 0;
+            }
+        }
     } /* endif scr_is_dirty */
     /* Put cursor at its current position. Note that the horizontal position
      * at which the cursor is displayed may be different compared to 'E.cx'
