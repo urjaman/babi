@@ -70,12 +70,12 @@
 #define HL_HIGHLIGHT_NUMBERS (1<<1)
 
 struct editorSyntax {
-    char **filematch;
-    char **keywords;
-    char singleline_comment_start[2];
-    char multiline_comment_start[3];
-    char multiline_comment_end[3];
-    int flags;
+    const char **filematch;
+    const char **keywords;
+    const char singleline_comment_start[2];
+    const char multiline_comment_start[3];
+    const char multiline_comment_end[3];
+    const int flags;
 };
 
 /* This structure represents a single line of the file we are editing. */
@@ -108,7 +108,9 @@ struct editorConfig {
     char *filename; /* Currently open filename */
     char statusmsg[80];
     time_t statusmsg_time;
-    struct editorSyntax *syntax;    /* Current syntax highlight, or NULL. */
+    const struct editorSyntax *syntax;    /* Current syntax highlight, or NULL. */
+    erow *cutbuf; /* The rows in cut buffer */
+    int cutcnt; /* Number of rows in cut buffer */
 };
 
 static struct editorConfig E;
@@ -166,8 +168,8 @@ void editorSetStatusMessage(const char *fmt, ...);
  * There is no support to highlight patterns currently. */
 
 /* C / C++ */
-char *C_HL_extensions[] = {".c",".cpp",NULL};
-char *C_HL_keywords[] = {
+const char *C_HL_extensions[] = {".c",".cpp",NULL};
+const char *C_HL_keywords[] = {
         /* A few C / C++ keywords */
         "switch","if","while","for","break","continue","return","else",
         "struct","union","typedef","static","enum","class",
@@ -178,7 +180,7 @@ char *C_HL_keywords[] = {
 
 /* Here we define an array of syntax highlights by extensions, keywords,
  * comments delimiters and flags. */
-struct editorSyntax HLDB[] = {
+const struct editorSyntax HLDB[] = {
     {
         /* C / C++ */
         C_HL_extensions,
@@ -419,10 +421,10 @@ void editorUpdateSyntax(int filerow) {
 
     int i, prev_sep, in_string, in_comment;
     char *p;
-    char **keywords = E.syntax->keywords;
-    char *scs = E.syntax->singleline_comment_start;
-    char *mcs = E.syntax->multiline_comment_start;
-    char *mce = E.syntax->multiline_comment_end;
+    const char **keywords = E.syntax->keywords;
+    const char *scs = E.syntax->singleline_comment_start;
+    const char *mcs = E.syntax->multiline_comment_start;
+    const char *mce = E.syntax->multiline_comment_end;
 
     /* Point to the first non-space char. */
     p = row->render;
@@ -566,7 +568,7 @@ int editorSyntaxToColor(int hl) {
  * setting it in the global state E.syntax. */
 void editorSelectSyntaxHighlight(char *filename) {
     for (unsigned int j = 0; j < HLDB_ENTRIES; j++) {
-        struct editorSyntax *s = HLDB+j;
+        const struct editorSyntax *s = HLDB+j;
         unsigned int i = 0;
         while(s->filematch[i]) {
             char *p;
@@ -1374,16 +1376,8 @@ void handleSigWinCh(int unused __attribute__((unused))) {
 }
 
 void initEditor(void) {
-    E.cx = 0;
-    E.cy = 0;
-    E.rowoff = 0;
-    E.coloff = 0;
-    E.numrows = 0;
-    E.row = NULL;
-    E.dirty = 0;
-    E.filename = NULL;
-    E.syntax = NULL;
-    E.screendirty = NULL;
+    /* We're called only once and E is in .bss, dont bother zeroing things. */
+    /* If we end up being called more often, memset the struct to zero. */
     E.scr_is_dirty = 1;
     updateWindowSize();
     signal(SIGWINCH, handleSigWinCh);
