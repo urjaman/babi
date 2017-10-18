@@ -1,10 +1,6 @@
 Kilo
 ===
 
-Kilo is a small text editor in less than 1K lines of code (counted with cloc).
-
-A screencast is available here: https://asciinema.org/a/90r2i9bq8po03nazhqtsifksb
-
 Usage: kilo `<filename>`
 
 Keys:
@@ -25,6 +21,23 @@ style CLI.
 Kilo was written by Salvatore Sanfilippo aka antirez and is released
 under the BSD 2 clause license.
 
-## Install
+## kilo/BusyBox
 
-    curl -L https://raw.githubusercontent.com/SegFaulty/kilo/master/install.sh | /bin/bash
+My point is to make kilo into a very small nano-like editor for BusyBox,
+don't know if I'll get there though
+
+TODO:
+- line cutting and pasting (CTRL-K and U from nano)
+- (atleast slightly) optimized drawing and memory operations
+  (did i read it draws the whole screen always with a buffer that is realloc'd on every
+   append to it...)
+- nano-compatible keybindings (CTRL-W to find, CTRL-X to save and quit, CTRL-O to save)
+  (these will be in addition to the kilo ones but just so it requires basically 0 learning from using nano)
+- shell script syntax highlighting (shell scripts are what you're mostly editing on BusyBox systems anyways)
+- BusyBoxy feature configuration:
+  - syntax highlighting
+    - C
+    - shell
+  - line cut and paste
+  - search
+
