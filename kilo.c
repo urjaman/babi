@@ -97,7 +97,6 @@ struct editorConfig {
     int screencols; /* Number of cols that we can show */
     char *screendirty; /* A flag whether each row of the screen needs redraw. */
     int numrows;    /* Number of rows */
-    int rawmode;    /* Is terminal raw mode enabled? */
     erow *row;      /* Rows */
     int dirty;      /* File modified but not saved. */
     int scr_is_dirty; /* Screen contents (anything but cursor position) has changed. */
@@ -196,7 +195,7 @@ void oomeExit(void) {
     /* TODO: Try to perform an emergency save of the file contents (to a .save) file. */
     /* This would also be done on SIGSEGV or similar (SIGHUP). */
     /* N.B. No memory allocations in the file save path would help this :P */
-    printf("Out of memory.");
+    printf("\r\nOut of memory.\r\n");
     exit(1);
 }
 
@@ -225,10 +224,7 @@ static struct termios orig_termios; /* In order to restore at exit.*/
 
 void disableRawMode(int fd) {
     /* Don't even check the return value as it's too late. */
-    if (E.rawmode) {
-        tcsetattr(fd,TCSAFLUSH,&orig_termios);
-        E.rawmode = 0;
-    }
+    tcsetattr(fd,TCSAFLUSH,&orig_termios);
 }
 
 /* Called at exit to avoid remaining in raw mode. */
@@ -240,7 +236,6 @@ void editorAtExit(void) {
 int enableRawMode(int fd) {
     struct termios raw;
 
-    if (E.rawmode) return 0; /* Already enabled. */
     if (!isatty(STDIN_FILENO)) goto fatal;
     atexit(editorAtExit);
     if (tcgetattr(fd,&orig_termios) == -1) goto fatal;
@@ -262,7 +257,6 @@ int enableRawMode(int fd) {
 
     /* put terminal in raw mode after flushing */
     if (tcsetattr(fd,TCSAFLUSH,&raw) < 0) goto fatal;
-    E.rawmode = 1;
     return 0;
 
 fatal:
@@ -340,11 +334,8 @@ int getWindowSize(int *rows, int *cols) {
 void screenSetDirty(int st, int to_end) {
     /* Filter out trying to dirty areas outside screen. */
     if (st < 0) {
-        if (to_end) {
-            st = 0;
-        } else {
-            return;
-        }
+        if (!to_end) return;
+        st = 0;
     }
     if (st >= E.screenrows) return;
     E.scr_is_dirty = 1;
@@ -500,7 +491,7 @@ void editorUpdateSyntax(int filerow) {
         p++; i++;
     }
 
-    /* Propagate syntax change to the next row if the open commen
+    /* Propagate syntax change to the next row if the open comment
      * state changed. This may recursively affect all the following rows
      * in the file. Gosh, atleast make it tail-callable... */
     int prev_oc = row->hl_oc;
