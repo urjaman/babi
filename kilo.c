@@ -70,8 +70,8 @@
 #define HL_HIGHLIGHT_NUMBERS (1<<1)
 
 struct editorSyntax {
-    const char **filematch;
-    const char **keywords;
+    const char * const *filematch;
+    const char * const *keywords;
     const char singleline_comment_start[2];
     const char multiline_comment_start[3];
     const char multiline_comment_end[3];
@@ -166,8 +166,8 @@ void editorSetStatusMessage(const char *fmt, ...);
  * There is no support to highlight patterns currently. */
 
 /* C / C++ */
-const char *C_HL_extensions[] = {".c",".cpp",NULL};
-const char *C_HL_keywords[] = {
+const char * const C_HL_extensions[] = {".c",".cpp",NULL};
+const char * const C_HL_keywords[] = {
         /* A few C / C++ keywords */
         "switch","if","while","for","break","continue","return","else",
         "struct","union","typedef","static","enum","class",
@@ -371,7 +371,7 @@ void editorUpdateSyntax(int filerow) {
 
     int i, prev_sep, in_string, in_comment;
     char *p;
-    const char **keywords = E.syntax->keywords;
+    const char * const *keywords = E.syntax->keywords;
     const char *scs = E.syntax->singleline_comment_start;
     const char *mcs = E.syntax->multiline_comment_start;
     const char *mce = E.syntax->multiline_comment_end;
@@ -1286,7 +1286,7 @@ void editorMoveCursor(int key) {
 void editorProcessKeypress(int fd) {
     /* When the file is modified, requires Ctrl-q to be pressed N times
      * before actually quitting. */
-    static int quit_times = KILO_QUIT_TIMES;
+    static int quit_times = 0;
 
     int c = editorReadKey(fd);
     switch(c) {
@@ -1314,17 +1314,17 @@ void editorProcessKeypress(int fd) {
                 break;
             }
             if ((c == 'n')||(c == 'N')) {
-                quit_times = 0; /* Confirmed no save. */
+                quit_times = KILO_QUIT_TIMES; /* Confirmed no save. */
                 break;
             }
         }
         /* FALLTHROUGH */
     case CTRL_Q:        /* Ctrl-q */
         /* Quit if the file was already saved. */
-        if (E.dirty && quit_times) {
+        if (E.dirty && quit_times < KILO_QUIT_TIMES) {
             editorSetStatusMessage("WARNING!!! File has unsaved changes. "
-                "Press Ctrl-Q %d more times to quit.", quit_times);
-            quit_times--;
+                "Press Ctrl-Q %d more times to quit.", KILO_QUIT_TIMES - quit_times);
+            quit_times++;
             return;
         }
         /*system("clear");*/
@@ -1375,11 +1375,7 @@ void editorProcessKeypress(int fd) {
         break;
     }
 
-    quit_times = KILO_QUIT_TIMES; /* Reset it to the original value. */
-}
-
-int editorFileWasModified(void) {
-    return E.dirty;
+    quit_times = 0; /* Reset it to the original value. */
 }
 
 void updateWindowSize(void) {
