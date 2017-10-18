@@ -1275,7 +1275,9 @@ void editorMoveCursor(int key) {
     case ARROW_UP:
         if (E.cy == 0) {
             if (E.rowoff) {
-                E.rowoff--;
+                E.rowoff -= (E.screenrows/2);
+                if (E.rowoff < 0) E.rowoff = 0;
+                E.cy = (filerow - E.rowoff)-1;
                 screenSetDirty(0,1);
             }
         } else {
@@ -1289,7 +1291,9 @@ void editorMoveCursor(int key) {
     case ARROW_DOWN:
         if (filerow < E.numrows) {
             if (E.cy == E.screenrows-1) {
-                E.rowoff++;
+                E.rowoff += E.screenrows/2;
+                if (E.rowoff >= E.numrows) E.rowoff = E.numrows-1;
+                E.cy = (filerow+1) - E.rowoff;
                 screenSetDirty(0,1); /* Scroll. */
             } else {
                 if (E.coloff) {
@@ -1299,6 +1303,20 @@ void editorMoveCursor(int key) {
                 E.cy += 1;
             }
         }
+        break;
+    case PAGE_DOWN:
+        E.cx = 0;
+        E.cy = 0;
+        E.rowoff += (E.screenrows-2);
+        if (E.rowoff >= E.numrows) E.rowoff = E.numrows-1;
+        screenSetDirty(0,1);
+        break;
+    case PAGE_UP:
+        E.cx = 0;
+        E.cy = 0;
+        E.rowoff -= (E.screenrows-2);
+        if (E.rowoff < 0) E.rowoff = 0;
+        screenSetDirty(0,1);
         break;
     }
     /* Fix cx if the current line has not enough chars. */
@@ -1365,25 +1383,14 @@ void editorProcessKeypress(int fd) {
     case DEL_KEY:
         editorDelChar();
         break;
-    case PAGE_UP:
-    case PAGE_DOWN:
-        if (c == PAGE_UP && E.cy != 0)
-            E.cy = 0;
-        else if (c == PAGE_DOWN && E.cy != E.screenrows-1)
-            E.cy = E.screenrows-1;
-        {
-        int times = E.screenrows;
-        while(times--)
-            editorMoveCursor(c == PAGE_UP ? ARROW_UP:
-                                            ARROW_DOWN);
-        }
-        break;
     case HOME_KEY:
        startOfLine();
        break;
     case END_KEY:
        endOfLine();
        break;
+    case PAGE_UP:
+    case PAGE_DOWN:
     case ARROW_UP:
     case ARROW_DOWN:
     case ARROW_LEFT:
@@ -1446,7 +1453,7 @@ int main(int argc, char **argv) {
     editorOpen(argv[1]);
     enableRawMode(STDIN_FILENO);
     editorSetStatusMessage(
-        "HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find | Ctrl-E = erase Line");
+        "HELP: Ctrl-S (^S):Save | ^Q:quit | ^F:find | ^K:Cut Line | ^U: Uncut");
     while(1) {
         editorRefreshScreen();
         editorProcessKeypress(STDIN_FILENO);
