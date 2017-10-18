@@ -934,9 +934,8 @@ void editorRefreshScreen(void) {
     char buf[32];
     struct abuf ab; abInit(&ab);
 
-    abAppend(&ab,"\x1b[?25l",6); /* Hide cursor. */
     if (E.scr_is_dirty) {
-        abAppend(&ab,"\x1b[H",3); /* Go home. */
+        abAppend(&ab,"\x1b[?25l\x1b[H",6+3); /* Hide cursor and Go home */
         for (y = 0; y < E.screenrows; y++) {
             int filerow = E.rowoff+y;
 
@@ -1000,15 +999,12 @@ void editorRefreshScreen(void) {
                     }
                 }
             }
-            abAppend(&ab,"\x1b[39m",5);
-            abAppend(&ab,"\x1b[0K",4);
-            abAppend(&ab,"\r\n",2);
+            abAppend(&ab,"\x1b[39m\x1b[0K\r\n",5+4+2);
             E.screendirty[y] = 0;
         }
 
         /* Create a two rows status. First row: */
-        abAppend(&ab,"\x1b[0K",4);
-        abAppend(&ab,"\x1b[7m",4);
+        abAppend(&ab,"\x1b[0K\x1b[7m",4+4);
         char status[80], rstatus[80];
         int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
             E.filename, E.numrows, E.dirty ? "(modified)" : "");
@@ -1025,10 +1021,9 @@ void editorRefreshScreen(void) {
                 len++;
             }
         }
-        abAppend(&ab,"\x1b[0m\r\n",6);
 
         /* Second row depends on E.statusmsg and the status message update time. */
-        abAppend(&ab,"\x1b[0K",4);
+        abAppend(&ab,"\x1b[0m\r\n\x1b[0K",6+4);
         int msglen = strlen(E.statusmsg);
         if (msglen && time(NULL)-E.statusmsg_time < 5)
             abAppend(&ab,E.statusmsg,msglen <= E.screencols ? msglen : E.screencols);
@@ -1365,8 +1360,7 @@ void updateWindowSize(void) {
     }
     E.screenrows -= 2; /* Get room for status bar. */
     if (E.screendirty) free(E.screendirty);
-    E.screendirty = malloc(E.screenrows);
-    if (!E.screendirty) oomeExit();
+    if (!(E.screendirty = malloc(E.screenrows))) oomeExit();
     memset(E.screendirty, 1, E.screenrows); /* All dirty. */
 }
 
