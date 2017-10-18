@@ -30,10 +30,11 @@ DONE:
 - (atleast slightly) optimized drawing and memory operations
   (did i read it draws the whole screen always with a buffer that is realloc'd on every
    append to it...)
+- line cutting and pasting (CTRL-K and U from nano)
+- CTRL-W to find
 
 TODO:
-- line cutting and pasting (CTRL-K and U from nano)
-- nano-compatible keybindings (CTRL-W to find, CTRL-X to save and quit, CTRL-O to save)
+- nano-compatible keybindings (CTRL-X to save and quit, CTRL-O to save with filename check)
   (these will be in addition to the kilo ones but just so it requires basically 0 learning from using nano)
 - shell script syntax highlighting (shell scripts are what you're mostly editing on BusyBox systems anyways)
 - BusyBoxy feature configuration:
