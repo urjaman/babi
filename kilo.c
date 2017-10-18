@@ -1,5 +1,4 @@
-/* Kilo -- A very simple editor in less than 1-kilo lines of code (as counted
- *         by "cloc"). Does not depend on libcurses, directly emits VT100
+/* Kilo -- A very simple editor. Does not depend on libcurses, directly emits VT100
  *         escapes on the terminal.
  *
  * -----------------------------------------------------------------------
@@ -32,7 +31,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define KILO_VERSION "0.0.1"
+#define KILO_VERSION "0.B.1"
 
 #define _BSD_SOURCE
 #define _GNU_SOURCE
@@ -846,8 +845,7 @@ struct abuf {
 
 void abAppend(struct abuf *ab, const char *s, int len) {
     char *new = realloc(ab->b,ab->len+len);
-
-    if (new == NULL) return;
+    /* TODO: ACTUALLY handle out of memory */
     memcpy(new+ab->len,s,len);
     ab->b = new;
     ab->len += len;
@@ -874,7 +872,7 @@ void editorRefreshScreen(void) {
             if (E.numrows == 0 && y == E.screenrows/3) {
                 char welcome[80];
                 int welcomelen = snprintf(welcome,sizeof(welcome),
-                    "Kilo editor -- verison %s\x1b[0K\r\n", KILO_VERSION);
+                    "Kilo editor -- version %s\x1b[0K\r\n", KILO_VERSION);
                 int padding = (E.screencols-welcomelen)/2;
                 if (padding) {
                     abAppend(&ab,"~",1);
@@ -993,7 +991,7 @@ void editorSetStatusMessage(const char *fmt, ...) {
 void startOfLine() {
      int filerow = E.rowoff + E.cy;
      erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
-     if (row )
+     if (row)
          E.cx = 0;
  }
 
@@ -1003,6 +1001,7 @@ void endOfLine() {
   if (row)
     E.cx = row->size;
 }
+
 void editorFind(int fd) {
     char query[KILO_QUERY_LEN+1] = {0};
     int qlen = 0;
