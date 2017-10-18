@@ -412,6 +412,7 @@ void editorUpdateSyntax(int filerow) {
     erow * row = E.row+filerow;
     row->hl = realloc(row->hl,row->rsize);
     memset(row->hl,HL_NORMAL,row->rsize);
+    screenSetDirty(filerow-E.rowoff, 0);
 
     if (E.syntax == NULL) return; /* No syntax, everything is HL_NORMAL. */
 
@@ -617,6 +618,7 @@ void editorInsertRow(int at, char *s, size_t len) {
     E.row = realloc(E.row,sizeof(erow)*(E.numrows+1));
     if (at != E.numrows) {
         memmove(E.row+at+1,E.row+at,sizeof(E.row[0])*(E.numrows-at));
+        screenSetDirty(at, 1);
     }
     E.row[at].size = len;
     E.row[at].chars = malloc(len+1);
@@ -648,6 +650,7 @@ void editorDelRow(int at) {
     memmove(E.row+at,E.row+at+1,sizeof(E.row[0])*(E.numrows-at-1));
     E.numrows--;
     E.dirty++;
+    screenSetDirty(at, 1);
 }
 
 /* Turn the editor rows into a single heap-allocated string.
@@ -769,10 +772,13 @@ void editorInsertNewline(void) {
         row->chars[filecol] = '\0';
         row->size = filecol;
         editorUpdateRow(filerow);
+        screenSetDirty(filerow, 1);
     }
 fixcursor:
+    if (E.coloff) screenSetDirty(E.cy, 0);
     if (E.cy == E.screenrows-1) {
         E.rowoff++;
+        screenSetDirty(0,1);
     } else {
         E.cy++;
     }
@@ -804,6 +810,7 @@ void editorDelChar(void) {
             E.cx -= shift;
             E.coloff += shift;
         }
+        screenSetDirty(E.cy, 1);
     } else {
         editorRowDelChar(filerow,filecol-1);
         if (E.cx == 0 && E.coloff)
@@ -1025,7 +1032,7 @@ void editorRefreshScreen(void) {
         int msglen = strlen(E.statusmsg);
         if (msglen && time(NULL)-E.statusmsg_time < 5)
             abAppend(&ab,E.statusmsg,msglen <= E.screencols ? msglen : E.screencols);
-    }
+    } /* endif scr_is_dirty */
     /* Put cursor at its current position. Note that the horizontal position
      * at which the cursor is displayed may be different compared to 'E.cx'
      * because of TABs. */
@@ -1104,6 +1111,7 @@ void editorFind(int fd) {
             if (qlen != 0) query[--qlen] = '\0';
             last_match = -1;
         } else if (c == ESC || c == ENTER) {
+            screenSetDirty(0,1);
             if (c == ESC) {
                 E.cx = saved_cx; E.cy = saved_cy;
                 E.coloff = saved_coloff; E.rowoff = saved_rowoff;
@@ -1164,6 +1172,7 @@ void editorFind(int fd) {
                     E.cx -= diff;
                     E.coloff += diff;
                 }
+                screenSetDirty(0,1);
             }
         }
     }
