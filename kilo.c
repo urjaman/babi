@@ -105,8 +105,9 @@ struct editorConfig {
     char statusmsg[80];
     time_t statusmsg_time;
     const struct editorSyntax *syntax;    /* Current syntax highlight, or NULL. */
-    erow *cutbuf; /* The rows in cut buffer */
+    char **cutbuf; /* The rows in cut buffer */
     int cutcnt; /* Number of rows in cut buffer */
+    int cutrow; /* "Source" of the rows cut. */
 };
 
 static struct editorConfig E;
@@ -380,13 +381,19 @@ failed:
     return -1;
 }
 
-void screenSetDirty(int start, int to_end) {
+void screenSetDirty(int st, int to_end) {
     /* Filter out trying to dirty areas outside screen. */
-    if (start < 0) return;
-    if (start >= E.screenrows) return;
+    if (st < 0) {
+        if (to_end) {
+            st = 0;
+        } else {
+            return;
+        }
+    }
+    if (st >= E.screenrows) return;
     E.scr_is_dirty = 1;
-    int end = to_end ? E.screenrows-1 : start;
-    memset(E.screendirty+start, 1, (end-start)+1);
+    int e = to_end ? E.screenrows-1 : st;
+    memset(E.screendirty+st, 1, (e-st)+1);
 }
 
 /* ====================== Syntax highlight color scheme  ==================== */
@@ -617,8 +624,8 @@ void editorInsertRow(int at, char *s, size_t len) {
     E.row = realloc(E.row,sizeof(erow)*(E.numrows+1));
     if (at != E.numrows) {
         memmove(E.row+at+1,E.row+at,sizeof(E.row[0])*(E.numrows-at));
-        screenSetDirty(at, 1);
     }
+    screenSetDirty(at-E.rowoff, 1);
     E.row[at].size = len;
     E.row[at].chars = malloc(len+1);
     memcpy(E.row[at].chars,s,len+1);
@@ -649,7 +656,42 @@ void editorDelRow(int at) {
     memmove(E.row+at,E.row+at+1,sizeof(E.row[0])*(E.numrows-at-1));
     E.numrows--;
     E.dirty++;
-    screenSetDirty(at, 1);
+    screenSetDirty(at-E.rowoff, 1);
+}
+
+void editorCutRow(int at) {
+    erow * row;
+
+    if (at >= E.numrows) return;
+    row = E.row+at;
+    if (at!=E.cutrow) { /* new cut */
+        if (E.cutbuf) {
+            for (int i=0;i<E.cutcnt;i++) free(E.cutbuf[i]);
+            free(E.cutbuf);
+        }
+        E.cutbuf = 0;
+        E.cutcnt = 0;
+        E.cutrow = at;
+    }
+    E.cutcnt++;
+    E.cutbuf = realloc(E.cutbuf,sizeof(char*)*E.cutcnt);
+    E.cutbuf[E.cutcnt-1] = strdup(row->chars);
+    editorDelRow(at);
+}
+
+void editorUncutRows(int at) {
+    if (!E.cutcnt) return;
+    E.cutrow = -1; /* After uncutting, next cut is always new */
+    for (int i=0;i<E.cutcnt;i++) editorInsertRow(at+i, E.cutbuf[i], strlen(E.cutbuf[i]));
+    E.cy += E.cutcnt;
+    int scrl = E.cy - (E.screenrows-1);
+    if (scrl>0) {
+        E.cy -= scrl;
+        E.rowoff += scrl;
+        screenSetDirty(0, 1);
+    } else {
+        screenSetDirty(E.cy-E.cutcnt, 1);
+    }
 }
 
 /* Turn the editor rows into a single heap-allocated string.
@@ -771,7 +813,7 @@ void editorInsertNewline(void) {
         row->chars[filecol] = '\0';
         row->size = filecol;
         editorUpdateRow(filerow);
-        screenSetDirty(filerow, 1);
+        screenSetDirty(filerow-E.rowoff, 1);
     }
 fixcursor:
     if (E.coloff) screenSetDirty(E.cy, 0);
@@ -1304,6 +1346,12 @@ void editorProcessKeypress(int fd) {
         /*system("clear");*/
         printf("\033[2J\033[1;1H");
         exit(0);
+        break;
+    case CTRL_K:
+        editorCutRow(E.rowoff + E.cy);
+        break;
+    case CTRL_U:
+        editorUncutRows(E.rowoff + E.cy);
         break;
     case CTRL_S:        /* Ctrl-s */
         editorSave();
