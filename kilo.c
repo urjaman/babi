@@ -106,6 +106,7 @@ struct editorConfig {
     char statusmsg[80];
     time_t statusmsg_time;
     struct editorSyntax *syntax;    /* Current syntax highlight, or NULL. */
+    char *screendirty; /* A flag whether each row of the screen needs redraw. */
 };
 
 static struct editorConfig E;
@@ -185,6 +186,12 @@ struct editorSyntax HLDB[] = {
 };
 
 #define HLDB_ENTRIES (sizeof(HLDB)/sizeof(HLDB[0]))
+
+/* =======================  Lack of memory management ======================= */
+void oomeExit(void) {
+    printf("Out of memory.");
+    exit(1);
+}
 
 /* ======================= Low level terminal handling ====================== */
 
@@ -849,10 +856,7 @@ void abInit(struct abuf *ab) {
     if (!ab->b) { /* Once more with a silly small buffer ... */
         ab->b = malloc(256);
         ab->blen = 256;
-        if (!ab->b) { /* Okay, cant run. */
-            printf("Out of memory.");
-            exit(1);
-        }
+        if (!ab->b) oomeExit();
     }
 }
 
@@ -910,6 +914,11 @@ void editorRefreshScreen(void) {
             }
             continue;
         }
+        /* For now we ignore the above part since those are short anyways. */
+        if (!E.screendirty[y]) {
+            abAppend(&ab,"\r\n",2);
+            continue;
+        }
 
         r = &E.row[filerow];
 
@@ -951,6 +960,7 @@ void editorRefreshScreen(void) {
         abAppend(&ab,"\x1b[39m",5);
         abAppend(&ab,"\x1b[0K",4);
         abAppend(&ab,"\r\n",2);
+        E.screendirty[y] = 0;
     }
 
     /* Create a two rows status. First row: */
@@ -1290,6 +1300,10 @@ void updateWindowSize(void) {
         exit(1);
     }
     E.screenrows -= 2; /* Get room for status bar. */
+    if (E.screendirty) free(E.screendirty);
+    E.screendirty = malloc(E.screenrows);
+    if (!E.screendirty) oomeExit();
+    memset(E.screendirty, 1, E.screenrows); /* All dirty. */
 }
 
 void handleSigWinCh(int unused __attribute__((unused))) {
@@ -1309,6 +1323,7 @@ void initEditor(void) {
     E.dirty = 0;
     E.filename = NULL;
     E.syntax = NULL;
+    E.screendirty = NULL;
     updateWindowSize();
     signal(SIGWINCH, handleSigWinCh);
 }
