@@ -122,10 +122,12 @@ enum KEY_ACTION {
         CTRL_K = 11,
         CTRL_L = 12,        /* Ctrl+l */
         ENTER = 13,         /* Enter */
+        CTRL_O = 15,
         CTRL_Q = 17,        /* Ctrl-q */
         CTRL_S = 19,        /* Ctrl-s */
         CTRL_U = 21,        /* Ctrl-u */
         CTRL_W = 23,
+        CTRL_X = 24,
         ESC = 27,           /* Escape */
         BACKSPACE =  127,   /* Backspace */
         /* The following are just soft codes, not really reported by the
@@ -1353,6 +1355,25 @@ void editorProcessKeypress(int fd) {
     case CTRL_E:        /* Ctrl-e */
        editorDelRow(E.rowoff + E.cy);
        break;
+    case CTRL_X:
+        while (E.dirty) {
+            editorSetStatusMessage("Save file Y/N/ESC?");
+	        editorRefreshScreen();
+            int c = editorReadKey(fd);
+            if ((c== CTRL_C)||(c == ESC)) {
+                editorSetStatusMessage("");
+                return;
+            }
+            if ((c == 'y')||(c=='Y')) {
+                if (editorSave()) return; /* Failed save aborts. */
+                break;
+            }
+            if ((c == 'n')||(c == 'N')) {
+                quit_times = 0; /* Confirmed no save. */
+                break;
+            }
+        }
+        /* FALLTHROUGH */
     case CTRL_Q:        /* Ctrl-q */
         /* Quit if the file was already saved. */
         if (E.dirty && quit_times) {
@@ -1371,6 +1392,7 @@ void editorProcessKeypress(int fd) {
     case CTRL_U:
         editorUncutRows(E.rowoff + E.cy);
         break;
+    case CTRL_O:
     case CTRL_S:        /* Ctrl-s */
         editorSave();
         break;

@@ -32,17 +32,16 @@ DONE:
    append to it...)
 - line cutting and pasting (CTRL-K and U from nano)
 - CTRL-W to find
+- nano-compatible keybindings (CTRL-X to save and quit, CTRL-O to save)
 
 TODO:
-- nano-compatible keybindings (CTRL-X to save and quit, CTRL-O to save with filename check)
-  (these will be in addition to the kilo ones but just so it requires basically 0 learning from using nano)
 - shell script syntax highlighting (shell scripts are what you're mostly editing on BusyBox systems anyways)
+- improved save routine (mostly, it shouldnt leave you with broken files OR need heap...)
+- attempt to save on crashy exits 
 - BusyBoxy feature configuration:
   - syntax highlighting
     - C
     - shell
   - line cut and paste
   - search
-- attempt to save on crashy exits 
-- improved save routine (mostly, it shouldnt leave you with broken files OR need heap...)
 
