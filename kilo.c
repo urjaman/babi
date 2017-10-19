@@ -173,7 +173,7 @@ const char * const C_HL_keywords[] = {
         "struct","union","typedef","static","enum","class",
         /* C types */
         "int|","long|","double|","float|","char|","unsigned|","signed|",
-        "void|",NULL
+        "void|","const|",NULL
 };
 
 /* Here we define an array of syntax highlights by extensions, keywords,
@@ -964,10 +964,10 @@ void editorRefreshScreen(void) {
                 unsigned char *hl = r->hl+E.coloff;
                 int j;
                 for (j = 0; j < len; j++) {
-                    if (hl[j] == HL_NONPRINT) {
+                    if (!isprint(c[j])) { /* Nonprinting */
                         char sym;
                         abAppend(&ab,"\x1b[7m",4);
-                       if (c[j] <= 26)
+                        if (c[j] <= 26)
                             sym = '@'+c[j];
                         else
                             sym = '?';
