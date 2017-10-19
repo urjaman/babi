@@ -57,7 +57,6 @@
 
 /* Syntax highlight types */
 #define HL_NORMAL 0
-#define HL_NONPRINT 1
 #define HL_COMMENT 2   /* Single line comment. */
 #define HL_MLCOMMENT 3 /* Multi-line comment. */
 #define HL_KEYWORD1 4
@@ -445,9 +444,8 @@ void editorUpdateSyntax(int filerow) {
             }
         }
 
-        /* Handle non printable chars. */
+        /* "Handle" non printable chars. */
         if (!isprint(*p)) {
-            row->hl[i] = HL_NONPRINT;
             p++; i++;
             prev_sep = 0;
             continue;
@@ -493,7 +491,7 @@ void editorUpdateSyntax(int filerow) {
 
     /* Propagate syntax change to the next row if the open comment
      * state changed. This may recursively affect all the following rows
-     * in the file. Gosh, atleast make it tail-callable... */
+     * in the file, so atleast make it tail-callable... */
     int prev_oc = row->hl_oc;
     row->hl_oc = editorRowHasOpenComment(row);
     if (row->hl_oc != prev_oc && filerow+1 < E.numrows)
