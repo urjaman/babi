@@ -55,6 +55,8 @@
 #include <unistd.h>
 #include <stdint.h>
 
+#define TAB_SIZE 8
+
 /* Syntax highlight types */
 #define HL_NORMAL 0
 #define HL_COMMENT 2   /* Single line comment. */
@@ -545,12 +547,12 @@ void editorUpdateRow(int filerow) {
     for (j = 0; j < row->size; j++)
         if (row->chars[j] == TAB) tabs++;
 
-    row->render = malloc(row->size + tabs*8 + 1); /* This calc is broken, but ok. */
+    row->render = malloc(row->size + tabs*TAB_SIZE + 1); /* This calc is broken, but ok. */
     idx = 0;
     for (j = 0; j < row->size; j++) {
         if (row->chars[j] == TAB) {
             row->render[idx++] = ' ';
-            while((idx+1) % 8 != 0) row->render[idx++] = ' ';
+            while((idx+1) % TAB_SIZE != 0) row->render[idx++] = ' ';
         } else {
             row->render[idx++] = row->chars[j];
         }
@@ -1027,7 +1029,7 @@ void editorRefreshScreen(void) {
     erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
     if (row) {
         for (j = E.coloff; j < (E.cx+E.coloff); j++) {
-            if (j < row->size && row->chars[j] == TAB) cx += 7-((cx)%8);
+            if (j < row->size && row->chars[j] == TAB) cx += (TAB_SIZE-1)-((cx)%TAB_SIZE);
             cx++;
         }
     }
