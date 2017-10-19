@@ -364,7 +364,7 @@ int editorRowHasOpenComment(erow *row) {
  * to the right syntax highlight type (HL_* defines). */
 void editorUpdateSyntax(int filerow) {
     erow * row = E.row+filerow;
-    row->hl = realloc(row->hl,row->rsize);
+    if (!(row->hl = realloc(row->hl,row->rsize))) oomeExit();
     memset(row->hl,HL_NORMAL,row->rsize);
     screenSetDirty(filerow-E.rowoff, 0);
 
@@ -547,7 +547,7 @@ void editorUpdateRow(int filerow) {
     for (j = 0; j < row->size; j++)
         if (row->chars[j] == TAB) tabs++;
 
-    row->render = malloc(row->size + tabs*TAB_SIZE + 1); /* This calc is broken, but ok. */
+    if (!(row->render = malloc(row->size + tabs*TAB_SIZE + 1))) oomeExit(); /* This calc is broken, but ok. */
     idx = 0;
     for (j = 0; j < row->size; j++) {
         if (row->chars[j] == TAB) {
@@ -568,11 +568,11 @@ void editorUpdateRow(int filerow) {
  * if required. */
 void editorInsertRow(int at, char *s, size_t len) {
     if (at > E.numrows) return;
-    E.row = realloc(E.row,sizeof(erow)*(E.numrows+1));
+    if (!(E.row = realloc(E.row,sizeof(erow)*(E.numrows+1)))) oomeExit();
     if (at != E.numrows) memmove(E.row+at+1,E.row+at,sizeof(E.row[0])*(E.numrows-at));
     screenSetDirty(at-E.rowoff, 1);
     E.row[at].size = len;
-    E.row[at].chars = malloc(len+1);
+    if (!(E.row[at].chars = malloc(len+1))) oomeExit();
     memcpy(E.row[at].chars,s,len+1);
     E.row[at].hl = NULL;
     E.row[at].hl_oc = 0;
@@ -619,7 +619,7 @@ void editorCutRow(int at) {
         E.cutrow = at;
     }
     E.cutcnt++;
-    E.cutbuf = realloc(E.cutbuf,sizeof(char*)*E.cutcnt);
+    if (!(E.cutbuf = realloc(E.cutbuf,sizeof(char*)*E.cutcnt))) oomeExit();
     E.cutbuf[E.cutcnt-1] = strdup(row->chars);
     editorDelRow(at);
 }
@@ -652,7 +652,7 @@ char *editorRowsToString(int *buflen) {
     *buflen = totlen;
     totlen++; /* Also make space for nulterm */
 
-    p = buf = malloc(totlen);
+    if (!(p = buf = malloc(totlen))) oomeExit();
     for (j = 0; j < E.numrows; j++) {
         memcpy(p,E.row[j].chars,E.row[j].size);
         p += E.row[j].size;
@@ -672,14 +672,14 @@ void editorRowInsertChar(int filerow, int at, int c) {
          * current length by more than a single character. */
         int padlen = at-row->size;
         /* In the next line +2 means: new char and null term. */
-        row->chars = realloc(row->chars,row->size+padlen+2);
+        if (!(row->chars = realloc(row->chars,row->size+padlen+2))) oomeExit();
         memset(row->chars+row->size,' ',padlen);
         row->chars[row->size+padlen+1] = '\0';
         row->size += padlen+1;
     } else {
         /* If we are in the middle of the string just make space for 1 new
          * char plus the (already existing) null term. */
-        row->chars = realloc(row->chars,row->size+2);
+        if (!(row->chars = realloc(row->chars,row->size+2))) oomeExit();
         memmove(row->chars+at+1,row->chars+at,row->size-at+1);
         row->size++;
     }
@@ -691,7 +691,7 @@ void editorRowInsertChar(int filerow, int at, int c) {
 /* Append the string 's' at the end of a row */
 void editorRowAppendString(int filerow, char *s, size_t len) {
     erow *row = E.row+filerow;
-    row->chars = realloc(row->chars,row->size+len+1);
+    if (!(row->chars = realloc(row->chars,row->size+len+1))) oomeExit();
     memcpy(row->chars+row->size,s,len);
     row->size += len;
     row->chars[row->size] = '\0';
@@ -880,9 +880,8 @@ void abInit(struct abuf *ab) {
     ab->b = malloc(ab->blen);
     ab->len = 0;
     if (!ab->b) { /* Once more with a silly small buffer ... */
-        ab->b = malloc(256);
+        if (!(ab->b = malloc(256))) oomeExit();
         ab->blen = 256;
-        if (!ab->b) oomeExit();
     }
 }
 
@@ -1145,7 +1144,7 @@ void editorFind(int fd) {
                 last_match = current;
                 if (row->hl) {
                     saved_hl_line = current;
-                    saved_hl = malloc(row->rsize);
+                    if (!(saved_hl = malloc(row->rsize))) oomeExit();
                     memcpy(saved_hl,row->hl,row->rsize);
                     memset(row->hl+match_offset,HL_MATCH,qlen);
                 }
