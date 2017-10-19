@@ -1246,17 +1246,13 @@ void editorMoveCursor(int key) {
             }
         }
         break;
+    case PAGE_UP:
     case PAGE_DOWN:
         E.cx = 0;
         E.cy = 0;
-        E.rowoff += (E.screenrows-2);
+        E.coloff = 0;
+        E.rowoff += (E.screenrows-2) * (key==PAGE_DOWN ? 1 : -1);
         if (E.rowoff >= E.numrows) E.rowoff = E.numrows-1;
-        screenSetDirty(0,1);
-        break;
-    case PAGE_UP:
-        E.cx = 0;
-        E.cy = 0;
-        E.rowoff -= (E.screenrows-2);
         if (E.rowoff < 0) E.rowoff = 0;
         screenSetDirty(0,1);
         break;
