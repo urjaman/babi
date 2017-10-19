@@ -593,7 +593,7 @@ void editorCutRow(int at) {
     }
     E.cutcnt++;
     if (!(E.cutbuf = realloc(E.cutbuf,sizeof(char*)*E.cutcnt))) oomeExit();
-    E.cutbuf[E.cutcnt-1] = strdup(row->chars);
+    if (!(E.cutbuf[E.cutcnt-1] = strdup(row->chars))) oomeExit();
     editorDelRow(at);
 }
 
@@ -775,7 +775,7 @@ int editorOpen(char *filename) {
 
     E.dirty = 0;
     free(E.filename);
-    E.filename = strdup(filename);
+    if (!(E.filename = strdup(filename))) oomeExit();
 
     fp = fopen(filename,"r");
     if (!fp) {
