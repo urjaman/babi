@@ -909,6 +909,20 @@ void abFree(struct abuf *ab) {
     free(ab->b);
 }
 
+int editorLineXtoScrX(int filerow, int lx)
+{
+    int scx = 0;
+    erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
+    if (row) {
+    	if (lx == -1) lx = row->size;
+        for (int j = 0; j < lx; j++) {
+            if (j < row->size && row->chars[j] == TAB) scx += (TAB_SIZE-1)-((scx+1)%TAB_SIZE);
+            scx++;
+        }
+    }
+    return scx;
+}
+
 /* This function writes the whole screen using VT100 escape characters
  * starting from the logical state of the editor in the global state 'E'. */
 void editorRefreshScreen(void) {
@@ -1022,17 +1036,8 @@ void editorRefreshScreen(void) {
     /* Put cursor at its current position. Note that the horizontal position
      * at which the cursor is displayed may be different compared to 'E.cx'
      * because of TABs. */
-    int j;
-    int cx = 1;
-    int filerow = E.rowoff+E.cy;
-    erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
-    if (row) {
-        for (j = E.coloff; j < (E.cx+E.coloff); j++) {
-            if (j < row->size && row->chars[j] == TAB) cx += (TAB_SIZE-1)-((cx)%TAB_SIZE);
-            cx++;
-        }
-    }
-    snprintf(buf,sizeof(buf),"\x1b[%d;%dH",E.cy+1,cx);
+    int cx = editorLineXtoScrX(E.cy+E.rowoff, E.cx) - E.coloff;
+    snprintf(buf,sizeof(buf),"\x1b[%d;%dH",E.cy+1,cx+1);
     abAppend(&ab,buf,strlen(buf));
     abAppend(&ab,"\x1b[?25h",6); /* Show cursor. */
     writeHard(STDOUT_FILENO,ab.b,ab.len);
