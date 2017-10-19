@@ -540,12 +540,12 @@ void editorUpdateRow(int filerow) {
     int tabs = 0, j, idx;
 
    /* Create a version of the row we can directly print on the screen,
-     * respecting tabs, substituting non printable characters with '?'. */
+    * respecting tabs. */
     free(row->render);
     for (j = 0; j < row->size; j++)
         if (row->chars[j] == TAB) tabs++;
 
-    row->render = malloc(row->size + tabs*8 + 1);
+    row->render = malloc(row->size + tabs*8 + 1); /* This calc is broken, but ok. */
     idx = 0;
     for (j = 0; j < row->size; j++) {
         if (row->chars[j] == TAB) {
@@ -567,9 +567,7 @@ void editorUpdateRow(int filerow) {
 void editorInsertRow(int at, char *s, size_t len) {
     if (at > E.numrows) return;
     E.row = realloc(E.row,sizeof(erow)*(E.numrows+1));
-    if (at != E.numrows) {
-        memmove(E.row+at+1,E.row+at,sizeof(E.row[0])*(E.numrows-at));
-    }
+    if (at != E.numrows) memmove(E.row+at+1,E.row+at,sizeof(E.row[0])*(E.numrows-at));
     screenSetDirty(at-E.rowoff, 1);
     E.row[at].size = len;
     E.row[at].chars = malloc(len+1);
@@ -633,10 +631,8 @@ void editorUncutRows(int at) {
     if (scrl>0) {
         E.cy -= scrl;
         E.rowoff += scrl;
-        screenSetDirty(0, 1);
-    } else {
-        screenSetDirty(E.cy-E.cutcnt, 1);
     }
+    screenSetDirty(scrl>0 ? 0 : E.cy-E.cutcnt, 1);
 }
 
 /* Turn the editor rows into a single heap-allocated string.
@@ -965,7 +961,7 @@ void editorRefreshScreen(void) {
                     if (!isprint(c[j])) { /* Nonprinting */
                         char sym;
                         abAppend(&ab,"\x1b[7m",4);
-                        if (c[j] <= 26)
+                        if (((unsigned char)c[j]) < 32)
                             sym = '@'+c[j];
                         else
                             sym = '?';
