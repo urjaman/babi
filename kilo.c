@@ -1284,10 +1284,6 @@ void editorProcessKeypress(int fd) {
     case ENTER:         /* Enter */
         editorInsertNewline();
         break;
-    case CTRL_C:        /* Ctrl-c */
-        /* We ignore ctrl-c, it can't be so simple to lose the changes
-         * to the edited file. */
-        break;
     case CTRL_E:        /* Ctrl-e */
        editorDelRow(E.rowoff + E.cy);
        break;
@@ -1358,8 +1354,9 @@ void editorProcessKeypress(int fd) {
     case CTRL_L: /* ctrl+l, clear screen */
         screenSetDirty(0,1);
         break;
+    case CTRL_C:
     case ESC:
-        /* Nothing to do for ESC in this mode. */
+        /* Nothing to do for these in this mode. */
         break;
     default:
         editorInsertChar(c);
