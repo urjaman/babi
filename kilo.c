@@ -362,7 +362,7 @@ int editorRowHasOpenComment(erow *row) {
  * to the right syntax highlight type (HL_* defines). */
 void editorUpdateSyntax(int filerow) {
     erow * row = E.row+filerow;
-    if (!(row->hl = realloc(row->hl,row->size))) oomeExit();
+    if (!(row->hl = realloc(row->hl,row->size+1))) oomeExit();
     memset(row->hl,HL_NORMAL,row->size);
     screenSetDirty(filerow-E.rowoff, 0);
 
@@ -1133,7 +1133,7 @@ void editorFind(int fd) {
                 last_match = current;
                 if (row->hl) {
                     saved_hl_line = current;
-                    if (!(saved_hl = malloc(row->size))) oomeExit();
+                    if (!(saved_hl = malloc(row->size+1))) oomeExit();
                     memcpy(saved_hl,row->hl,row->size);
                     memset(row->hl+match_offset,HL_MATCH,qlen);
                 }
