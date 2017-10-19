@@ -170,8 +170,8 @@ const char * const C_HL_extensions[] = {".c",".cpp",NULL};
 const char * const C_HL_keywords[] = {
         /* A few C / C++ keywords */
         "switch","if","while","for","break","continue","return","else",
-        "struct","union","typedef","static","enum","class",
-        /* C types */
+        /* C / C++ types */
+        "struct|","union|","typedef|","static|","enum|","class|",
         "int|","long|","double|","float|","char|","unsigned|","signed|",
         "void|","const|",NULL
 };
