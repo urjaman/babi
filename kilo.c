@@ -193,28 +193,6 @@ const struct editorSyntax HLDB[] = {
 
 #define HLDB_ENTRIES (sizeof(HLDB)/sizeof(HLDB[0]))
 
-/* =======================  Lack of memory management ======================= */
-
-int saveFile(const char* filename, int mode);
-
-int emergencySave(void) {
-    if (E.dirty) {
-    	if (!E.tmpbuf) return -1;
-    	strcpy(E.tmpbuf, E.filename); /* If you opened a >NAME_MAX file, sorry. */
-    	strcat(E.tmpbuf, ".kilo_save");
-    	return saveFile(E.tmpbuf, 0600);
-    }
-    return 0;
-}
-
-void oomeExit(void) {
-    printf("\r\nOut of memory.\r\n");
-    int r = emergencySave();
-    if (r<0) printf("Emergency save failed :(\r\n");
-    else if (r>0) printf("Emergency save done.\r\n");
-    exit(1);
-}
-
 /* ============================= Robust write() ============================= */
 
 ssize_t writeHard(int fd, const void *buf, size_t count) {
@@ -232,6 +210,40 @@ ssize_t writeHard(int fd, const void *buf, size_t count) {
         }
     } while(off<count);
     return count;
+}
+
+/* ======================= Surprise problem management ======================= */
+
+int saveFile(const char* filename, int mode);
+
+void wmsg(const char *msg) {
+    writeHard(1, msg, strlen(msg));
+}
+
+int emergencySave(void) {
+    if (E.dirty) {
+    	if (!E.tmpbuf) return -1;
+    	strcpy(E.tmpbuf, E.filename); /* If you opened a >NAME_MAX file, sorry. */
+    	strcat(E.tmpbuf, ".kilo_save");
+    	return saveFile(E.tmpbuf, 0600);
+    }
+    return 0;
+}
+
+void emergencyExit(const char* reason) {
+    wmsg(reason);
+    int r = emergencySave();
+    if (r<0) wmsg("Emergency save failed :(\r\n");
+    else if (r>0) wmsg("Emergency save done.\r\n");
+    exit(1);
+}
+
+void oomeExit(void) {
+    emergencyExit("\r\nOut of memory.\r\n");
+}
+
+void crashExit(int unused __attribute__((unused))) {
+    emergencyExit("\r\nSignal exit.\r\n");
 }
 
 /* ======================= Low level terminal handling ====================== */
@@ -1358,6 +1370,8 @@ void initEditor(void) {
     E.tmpsize = tmpbuf_base;
     updateWindowSize();
     signal(SIGWINCH, handleSigWinCh);
+    signal(SIGHUP, crashExit);
+    signal(SIGTERM, crashExit);
 }
 
 int main(int argc, char **argv) {
