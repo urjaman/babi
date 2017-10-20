@@ -50,6 +50,7 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <limits.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -106,6 +107,9 @@ struct editorConfig {
     char **cutbuf; /* The rows in cut buffer */
     int cutcnt; /* Number of rows in cut buffer */
     int cutrow; /* "Source" of the rows cut. */
+    char *tmpbuf; /* A temporary buffer, for temporary things. */
+    int tmpused; /* Amount of stuff in temporary buffer */
+    int tmpsize; /* Size of the temporary buffer */
 };
 
 static struct editorConfig E;
@@ -190,11 +194,24 @@ const struct editorSyntax HLDB[] = {
 #define HLDB_ENTRIES (sizeof(HLDB)/sizeof(HLDB[0]))
 
 /* =======================  Lack of memory management ======================= */
+
+int saveFile(const char* filename, int mode);
+
+int emergencySave(void) {
+    if (E.dirty) {
+    	if (!E.tmpbuf) return -1;
+    	strcpy(E.tmpbuf, E.filename); /* If you opened a >NAME_MAX file, sorry. */
+    	strcat(E.tmpbuf, ".kilo_save");
+    	return saveFile(E.tmpbuf, 0600);
+    }
+    return 0;
+}
+
 void oomeExit(void) {
-    /* TODO: Try to perform an emergency save of the file contents (to a .save) file. */
-    /* This would also be done on SIGSEGV or similar (SIGHUP). */
-    /* N.B. No memory allocations in the file save path would help this :P */
     printf("\r\nOut of memory.\r\n");
+    int r = emergencySave();
+    if (r<0) printf("Emergency save failed :(\r\n");
+    else if (r>0) printf("Emergency save done.\r\n");
     exit(1);
 }
 
@@ -544,17 +561,19 @@ void editorUpdateRow(int filerow) {
  * if required. */
 void editorInsertRow(int at, char *s, size_t len) {
     if (at > E.numrows) return;
-    if (!(E.row = realloc(E.row,sizeof(erow)*(E.numrows+1)))) oomeExit();
+    void *tmp;
+    if (!(tmp = realloc(E.row,sizeof(erow)*(E.numrows+1)))) oomeExit();
+    E.row = tmp;
     if (at != E.numrows) memmove(E.row+at+1,E.row+at,sizeof(E.row[0])*(E.numrows-at));
+    E.dirty++;
+    E.numrows++;
     screenSetDirty(at-E.rowoff, 1);
     E.row[at].size = len;
-    if (!(E.row[at].chars = malloc(len+1))) oomeExit();
-    memcpy(E.row[at].chars,s,len+1);
     E.row[at].hl = NULL;
     E.row[at].hl_oc = 0;
+    if (!(E.row[at].chars = malloc(len+1))) oomeExit();
+    memcpy(E.row[at].chars,s,len+1);
     editorUpdateRow(at);
-    E.numrows++;
-    E.dirty++;
 }
 
 /* Free row's heap allocated stuff. */
@@ -610,49 +629,26 @@ void editorUncutRows(int at) {
     screenSetDirty(scrl>0 ? 0 : E.cy-E.cutcnt, 1);
 }
 
-/* Turn the editor rows into a single heap-allocated string.
- * Returns the pointer to the heap-allocated string and populate the
- * integer pointed by 'buflen' with the size of the string, escluding
- * the final nulterm. */
-char *editorRowsToString(int *buflen) {
-    char *buf = NULL, *p;
-    int totlen = 0;
-    int j;
-
-    /* Compute count of bytes */
-    for (j = 0; j < E.numrows; j++)
-        totlen += E.row[j].size+1; /* +1 is for "\n" at end of every row */
-    *buflen = totlen;
-    totlen++; /* Also make space for nulterm */
-
-    if (!(p = buf = malloc(totlen))) oomeExit();
-    for (j = 0; j < E.numrows; j++) {
-        memcpy(p,E.row[j].chars,E.row[j].size);
-        p += E.row[j].size;
-        *p = '\n';
-        p++;
-    }
-    *p = '\0';
-    return buf;
-}
-
 /* Insert a character at the specified position in a row, moving the remaining
  * chars on the right if needed. */
 void editorRowInsertChar(int filerow, int at, int c) {
     erow *row = E.row+filerow;
+    void *tmp;
     if (at > row->size) {
         /* Pad the string with spaces if the insert location is outside the
          * current length by more than a single character. */
         int padlen = at-row->size;
         /* In the next line +2 means: new char and null term. */
-        if (!(row->chars = realloc(row->chars,row->size+padlen+2))) oomeExit();
+        if (!(tmp = realloc(row->chars,row->size+padlen+2))) oomeExit();
+        row->chars = tmp;
         memset(row->chars+row->size,' ',padlen);
         row->chars[row->size+padlen+1] = '\0';
         row->size += padlen+1;
     } else {
         /* If we are in the middle of the string just make space for 1 new
          * char plus the (already existing) null term. */
-        if (!(row->chars = realloc(row->chars,row->size+2))) oomeExit();
+        if (!(tmp = realloc(row->chars,row->size+2))) oomeExit();
+        row->chars = tmp;
         memmove(row->chars+at+1,row->chars+at,row->size-at+1);
         row->size++;
     }
@@ -664,7 +660,9 @@ void editorRowInsertChar(int filerow, int at, int c) {
 /* Append the string 's' at the end of a row */
 void editorRowAppendString(int filerow, char *s, size_t len) {
     erow *row = E.row+filerow;
-    if (!(row->chars = realloc(row->chars,row->size+len+1))) oomeExit();
+    void *tmp;
+    if (!(tmp = realloc(row->chars,row->size+len+1))) oomeExit();
+    row->chars = tmp;
     memcpy(row->chars+row->size,s,len);
     row->size += len;
     row->chars[row->size] = '\0';
@@ -800,76 +798,83 @@ int editorOpen(char *filename) {
     return 0;
 }
 
-/* Save the current file on disk. Return 0 on success, 1 on error. */
-int editorSave(void) {
-    int len;
-    char *buf = editorRowsToString(&len);
-    int fd = open(E.filename,O_RDWR|O_CREAT,0644);
-    if (fd == -1) goto writeerr;
+void abAppend(const void *s, int len) {
+    int nlen = E.tmpused + len;
+    if (nlen > E.tmpsize) {
+        int nblen = nlen + 256;
+    	void *tmp = realloc(E.tmpbuf, nblen);
+    	if (!tmp) oomeExit();
+    	E.tmpsize = nblen;
+    	E.tmpbuf = tmp;
+    }
+    memcpy(E.tmpbuf+E.tmpused,s,len);
+    E.tmpused = nlen;
+}
 
-    /* Use truncate + a single write(2) call in order to make saving
-     * a bit safer, under the limits of what we can do in a small editor. */
+void abFree(void) {
+    E.tmpused = 0;
+}
+
+int abWrite(int fd, const void *s, int len) {
+    int fr = E.tmpsize - E.tmpused;
+    if (len > fr) {
+        if (writeHard(fd, E.tmpbuf, E.tmpused) != E.tmpused) return 1;
+        E.tmpused = 0;
+    }
+    fr = E.tmpsize - E.tmpused;
+    if (len > fr) {
+        if (writeHard(fd, s, len) != len) return 1;
+        return 0;
+    }
+    memcpy(E.tmpbuf+E.tmpused, s, len);
+    E.tmpused += len;
+    return 0;
+}
+
+int saveFile(const char* filename, int mode) {
+    int len = 0;
+    int fd = open(filename,O_RDWR|O_CREAT, mode);
+    if (fd == -1) goto writeerr;
+    const char lf[1] = { '\n' };
+
+    E.tmpused = 0;
+    if (E.row) for (int i=0;i<E.numrows;i++) {
+        erow *row = E.row+i;
+        if (row->chars) {
+        	if (abWrite(fd, row->chars, row->size)) goto writeerr;
+        	len += row->size;
+        }
+        if (abWrite(fd, lf, 1)) goto writeerr;
+        len++;
+    }
+    /* Flush the buffer. */
+    if (E.tmpused) {
+    	if (writeHard(fd, E.tmpbuf, E.tmpused) != E.tmpused) goto writeerr;
+    }
+    /* Set the length to this. */
     if (ftruncate(fd,len) == -1) goto writeerr;
-    if (writeHard(fd,buf,len) != len) goto writeerr;
 
     close(fd);
-    free(buf);
     E.dirty = 0;
-    editorSetStatusMessage("%d bytes written on disk", len);
-    return 0;
+    return len;
 
 writeerr:
-    free(buf);
     if (fd != -1) close(fd);
+    return -1;
+}
+
+/* Save the current file on disk. Return 0 on success, 1 on error. */
+int editorSave(void) {
+    int r = saveFile(E.filename, 0644);
+    if (r>=0) {
+        editorSetStatusMessage("%d bytes written on disk", r);
+        return 0;
+    }
     editorSetStatusMessage("Can't save! I/O error: %s",strerror(errno));
     return 1;
 }
 
 /* ============================= Terminal update ============================ */
-
-/* We define a very simple "append buffer" structure, that is an heap
- * allocated string where we can append to. This is useful in order to
- * write all the escape sequences in a buffer and flush them to the standard
- * output in a single call, to avoid flickering effects. */
-struct abuf {
-    char *b;
-    int len;
-    int blen;
-};
-
-void abInit(struct abuf *ab) {
-    ab->blen = (E.screenrows + 3) * E.screencols; // Approximation for maximum needed space.
-    ab->b = malloc(ab->blen);
-    ab->len = 0;
-    if (!ab->b) { /* Once more with a silly small buffer ... */
-        if (!(ab->b = malloc(256))) oomeExit();
-        ab->blen = 256;
-    }
-}
-
-void abAppend(struct abuf *ab, const void *s, int len) {
-    int nlen = ab->len + len;
-    if (nlen > ab->blen) {
-        /* Try to switch to a bigger buffer. */
-        int nblen = nlen + 256;
-        char *nb = malloc(nblen);
-        if (!nb) { /* Okay, keep the current buffer, write in parts. */
-            writeHard(STDOUT_FILENO,ab->b,ab->len);
-            ab->len = 0;
-            nlen = len;
-        } else {
-            memcpy(nb, ab->b, ab->len);
-            free(ab->b);
-            ab->b = nb;
-        }
-    }
-    memcpy(ab->b+ab->len,s,len);
-    ab->len = nlen;
-}
-
-void abFree(struct abuf *ab) {
-    free(ab->b);
-}
 
 int editorLineXtoScrX(int filerow, int lx) {
     int scx = 0;
@@ -890,7 +895,6 @@ void editorRefreshScreen(void) {
     int y;
     erow *r;
     char buf[32];
-    struct abuf ab; abInit(&ab);
     int msglen = strlen(E.statusmsg);
     int show_statusmsg = (time(NULL)-E.statusmsg_time < 5);
 
@@ -910,7 +914,7 @@ void editorRefreshScreen(void) {
     }
 
     if (E.scr_is_dirty) {
-        abAppend(&ab,"\x1b[?25l\x1b[H",6+3); /* Hide cursor and Go home */
+        abAppend("\x1b[?25l\x1b[H",6+3); /* Hide cursor and Go home */
         for (y = 0; y < E.screenrows; y++) {
             int filerow = E.rowoff+y;
 
@@ -921,19 +925,19 @@ void editorRefreshScreen(void) {
                         "Kilo editor -- version %s\x1b[0K\r\n", KILO_VERSION);
                     int padding = (E.screencols-welcomelen)/2;
                     if (padding) {
-                        abAppend(&ab,"~",1);
+                        abAppend("~",1);
                         padding--;
                     }
-                    while(padding--) abAppend(&ab," ",1);
-                    abAppend(&ab,welcome,welcomelen);
+                    while(padding--) abAppend(" ",1);
+                    abAppend(welcome,welcomelen);
                 } else {
-                    abAppend(&ab,"~\x1b[0K\r\n",7);
+                    abAppend("~\x1b[0K\r\n",7);
                 }
                 continue;
             }
             /* For now we ignore the above part since those are short anyways. */
             if (!E.screendirty[y]) {
-                abAppend(&ab,"\r\n",2);
+                abAppend("\r\n",2);
                 continue;
             }
 
@@ -958,60 +962,60 @@ void editorRefreshScreen(void) {
                     	if (scrx < coff) continue;
                         if (!isprint(c_out)) { /* Nonprinting */
                             char sym;
-                            abAppend(&ab,"\x1b[7m",4);
+                            abAppend("\x1b[7m",4);
                             if (c_out < 32)
                                 sym = '@'+c_out;
                             else
                                 sym = '?';
-                            abAppend(&ab,&sym,1);
-                            abAppend(&ab,"\x1b[0m",4);
+                            abAppend(&sym,1);
+                            abAppend("\x1b[0m",4);
                         } else if (hl[j] == HL_NORMAL) {
                             if (current_color != -1) {
-                                abAppend(&ab,"\x1b[39m",5);
+                                abAppend("\x1b[39m",5);
                                 current_color = -1;
                             }
-                            abAppend(&ab,&c_out,1);
+                            abAppend(&c_out,1);
                         } else {
                             int color = editorSyntaxToColor(hl[j]);
                             if (color != current_color) {
                                 char buf[16];
                                 int clen = snprintf(buf,sizeof(buf),"\x1b[%dm",color);
                                 current_color = color;
-                                abAppend(&ab,buf,clen);
+                                abAppend(buf,clen);
                             }
-                            abAppend(&ab,&c_out,1);
+                            abAppend(&c_out,1);
                         }
                     } while (scrx++,--c_cnt);
                 }
             }
-            abAppend(&ab,"\x1b[39m\x1b[0K\r\n",5+4+2);
+            abAppend("\x1b[39m\x1b[0K\r\n",5+4+2);
             E.screendirty[y] = 0;
         }
 
         /* Create a two rows status. First row: */
-        abAppend(&ab,"\x1b[0K\x1b[7m",4+4);
+        abAppend("\x1b[0K\x1b[7m",4+4);
         char status[80], rstatus[80];
         int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
             E.filename, E.numrows, E.dirty ? "(modified)" : "");
         int rlen = snprintf(rstatus, sizeof(rstatus),
             "%d/%d",E.rowoff,E.numrows);
         if (len > E.screencols) len = E.screencols;
-        abAppend(&ab,status,len);
+        abAppend(status,len);
         while(len < E.screencols) {
             if (E.screencols - len == rlen) {
-                abAppend(&ab,rstatus,rlen);
+                abAppend(rstatus,rlen);
                 break;
             } else {
-                abAppend(&ab," ",1);
+                abAppend(" ",1);
                 len++;
             }
         }
 
         /* Second row depends on E.statusmsg and the status message update time. */
-        abAppend(&ab,"\x1b[0m\r\n\x1b[0K",6+4);
+        abAppend("\x1b[0m\r\n\x1b[0K",6+4);
         if (msglen) {
             if (show_statusmsg) {
-                abAppend(&ab,E.statusmsg,msglen <= E.screencols ? msglen : E.screencols);
+                abAppend(E.statusmsg,msglen <= E.screencols ? msglen : E.screencols);
             } else {
                 E.statusmsg[0] = 0;
             }
@@ -1022,10 +1026,10 @@ void editorRefreshScreen(void) {
      * because of TABs. */
     int cx = editorLineXtoScrX(E.cy+E.rowoff, E.cx) - E.coloff;
     snprintf(buf,sizeof(buf),"\x1b[%d;%dH",E.cy+1,cx+1);
-    abAppend(&ab,buf,strlen(buf));
-    abAppend(&ab,"\x1b[?25h",6); /* Show cursor. */
-    writeHard(STDOUT_FILENO,ab.b,ab.len);
-    abFree(&ab);
+    abAppend(buf,strlen(buf));
+    abAppend("\x1b[?25h",6); /* Show cursor. */
+    writeHard(STDOUT_FILENO,E.tmpbuf,E.tmpused);
+    abFree();
     E.scr_is_dirty = 0;
 }
 
@@ -1330,22 +1334,27 @@ void updateWindowSize(void) {
         exit(1);
     }
     E.screenrows -= 2; /* Get room for status bar. */
-    if (E.screendirty) free(E.screendirty);
-    if (!(E.screendirty = malloc(E.screenrows))) oomeExit();
-    memset(E.screendirty, 1, E.screenrows); /* All dirty. */
+    if (!(E.screendirty = realloc(E.screendirty, E.screenrows))) oomeExit();
+    screenSetDirty(0,1);
 }
 
 void handleSigWinCh(int unused __attribute__((unused))) {
     updateWindowSize();
-    if (E.cy > E.screenrows) E.cy = E.screenrows - 1;
-    if (E.cx > E.screencols) E.cx = E.screencols - 1;
+    int fr = E.cy+E.rowoff;
+    if (E.cy >= E.screenrows) {
+        E.cy = E.screenrows - 1;
+        E.rowoff = fr - E.cy;
+    }
     editorRefreshScreen();
 }
 
 void initEditor(void) {
     /* We're called only once and E is in .bss, dont bother zeroing things. */
     /* If we end up being called more often, memset the struct to zero. */
-    E.scr_is_dirty = 1;
+    /* tmpbuf needs to be able to hold the emergency save filename, thus this default (usually 4096, which is plenty.) */
+    const int tmpbuf_base = NAME_MAX;
+    if (!(E.tmpbuf = malloc(tmpbuf_base))) oomeExit();
+    E.tmpsize = tmpbuf_base;
     updateWindowSize();
     signal(SIGWINCH, handleSigWinCh);
 }
