@@ -837,7 +837,7 @@ int saveFile(const char* filename, int mode) {
     if (fd == -1) goto writeerr;
     const char lf[1] = { '\n' };
 
-    E.tmpused = 0;
+    abFree(); /* In case this is an emergency save, forget output. */
     if (E.row) for (int i=0;i<E.numrows;i++) {
         erow *row = E.row+i;
         if (row->chars) {
@@ -851,6 +851,7 @@ int saveFile(const char* filename, int mode) {
     if (E.tmpused) {
     	if (writeHard(fd, E.tmpbuf, E.tmpused) != E.tmpused) goto writeerr;
     }
+    abFree();
     /* Set the length to this. */
     if (ftruncate(fd,len) == -1) goto writeerr;
 
