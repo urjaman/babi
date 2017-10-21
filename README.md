@@ -4,27 +4,25 @@ Kilo
 Usage: kilo `<filename>`
 
 Keys:
-
-    CTRL-S: Save
+    CTRL-X: Quit (asks to save)
+    CTRL-S: Save (also CTRL-O)
     CTRL-Q: Quit
-    CTRL-F: Find string in file (ESC to exit search, arrows to navigate)
+    CTRL-F: Find string in file (ESC to exit search, arrows to navigate) (also CTRL-W)
+    CTRL-K: Cut line(s) to cutbuffer
+    CTRL-U: Uncut
+    CTRL-E: Erase line
 
 Kilo does not depend on any library (not even curses). It uses fairly standard
-VT100 (and similar terminals) escape sequences. The project is in alpha
-stage and was written in just a few hours taking code from my other two
-projects, load81 and linenoise.
+VT100 (and similar terminals) escape sequences. 
 
-People are encouraged to use it as a starting point to write other editors
-or command line interfaces that are more advanced than the usual REPL
-style CLI.
-
-Kilo was written by Salvatore Sanfilippo aka antirez and is released
+Kilo was originally written by Salvatore Sanfilippo aka antirez and is released
 under the BSD 2 clause license.
+This fork was heavily modified by Urja Rannikko.
 
-## kilo/BusyBox
+## This forked kilo
 
-My point is to make kilo into a very small nano-like editor for BusyBox,
-don't know if I'll get there though
+My point is to make kilo into a very small nano-like editor, for small embedded
+device usage (maybe get it embedded into busybox at some point?)
 
 DONE:
 - (atleast slightly) optimized drawing and memory operations
