@@ -180,14 +180,29 @@ const char * const C_HL_keywords[] = {
         "void|","const|",NULL
 };
 
+/* shell */
+const char * const SH_HL_extensions[] = {".sh", NULL};
+const char * const SH_HL_keywords[] = {
+    "coproc", "elif", "fi", "if", "then",
+    "while", "do", "else", "for", "in", "time",
+    "case", "done", "esac", "function", "select",
+    "until", "[", "]", "[[", "]]", "{", "}",
+    "return|", "exit|", "shift|","exec|", NULL
+};
+
 /* Here we define an array of syntax highlights by extensions, keywords,
  * comments delimiters and flags. */
 const struct editorSyntax HLDB[] = {
-    {
-        /* C / C++ */
+    {   /* C / C++ */
         C_HL_extensions,
         C_HL_keywords,
         "//","/*","*/",
+        HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_NUMBERS
+    },
+    {   /* shell */
+        SH_HL_extensions,
+        SH_HL_keywords,
+        "#", "", "",
         HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_NUMBERS
     }
 };
@@ -423,7 +438,7 @@ void editorUpdateSyntax(int filerow) {
 
     while(*p) {
         /* Handle // comments. */
-        if (prev_sep && *p == scs[0] && *(p+1) == scs[1]) {
+        if (prev_sep && *p == scs[0] && ((!scs[1]) || *(p+1) == scs[1])) {
             /* From here to end is a comment */
             memset(row->hl+i,HL_COMMENT,row->size-i);
             return;
@@ -443,7 +458,7 @@ void editorUpdateSyntax(int filerow) {
                 p++; i++;
                 continue;
             }
-        } else if (*p == mcs[0] && *(p+1) == mcs[1]) {
+        } else if ((mcs[0] && *p == mcs[0]) && *(p+1) == mcs[1]) {
             row->hl[i] = HL_MLCOMMENT;
             row->hl[i+1] = HL_MLCOMMENT;
             p += 2; i += 2;
@@ -561,6 +576,20 @@ void editorSelectSyntaxHighlight(char *filename) {
         }
     }
 }
+
+/* Called by the open function with the first line to check for a shell script shebang. */
+void editorCheckShebang(const char *line) {
+    /* Test if this looks like a shell script. */
+    if (strncmp(line,"#!/",3)) return;
+    const char *e = strstr(line, " ");
+    if (!e) e = line+strlen(line);
+    e = e - 2;
+    if (strncmp(e,"sh",2)) return;
+    /* Yup, #!/...sh looks like a shell script :P */
+    E.syntax = HLDB+1; /* shell */
+}
+
+
 
 /* ======================= Editor rows implementation ======================= */
 
@@ -806,6 +835,7 @@ int editorOpen(char *filename) {
     while((linelen = getline(&line,&linecap,fp)) != -1) {
         if (linelen && (line[linelen-1] == '\n' || line[linelen-1] == '\r'))
             line[--linelen] = '\0';
+        if (linelen && E.numrows==0) editorCheckShebang(line);
         editorInsertRow(E.numrows,line,linelen);
     }
     free(line);
