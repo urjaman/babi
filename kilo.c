@@ -1305,13 +1305,9 @@ void editorMoveCursor(int key) {
 
 /* Process events arriving from the standard input, which is, the user
  * is typing stuff on the terminal. */
-#define KILO_QUIT_TIMES 3
 void editorProcessKeypress(int fd) {
-    /* When the file is modified, requires Ctrl-q to be pressed N times
-     * before actually quitting. */
-    static int quit_times = 0;
-
     int c = editorReadKey(fd);
+
     switch(c) {
     case ENTER:         /* Enter */
         editorInsertNewline();
@@ -1319,6 +1315,7 @@ void editorProcessKeypress(int fd) {
     case CTRL_E:        /* Ctrl-e */
        editorDelRow(E.rowoff + E.cy);
        break;
+    case CTRL_Q:        /* Ctrl-q */
     case CTRL_X:
         while (E.dirty) {
             editorSetStatusMessage("Save file Y/N/ESC?");
@@ -1333,20 +1330,9 @@ void editorProcessKeypress(int fd) {
                 break;
             }
             if ((c == 'n')||(c == 'N')) {
-                quit_times = KILO_QUIT_TIMES; /* Confirmed no save. */
                 break;
             }
         }
-        /* FALLTHROUGH */
-    case CTRL_Q:        /* Ctrl-q */
-        /* Quit if the file was already saved. */
-        if (E.dirty && quit_times < KILO_QUIT_TIMES) {
-            editorSetStatusMessage("WARNING!!! File has unsaved changes. "
-                "Press Ctrl-Q %d more times to quit.", KILO_QUIT_TIMES - quit_times);
-            quit_times++;
-            return;
-        }
-        /*system("clear");*/
         printf("\033[2J\033[1;1H");
         exit(0);
         break;
@@ -1394,8 +1380,6 @@ void editorProcessKeypress(int fd) {
         editorInsertChar(c);
         break;
     }
-
-    quit_times = 0; /* Reset it to the original value. */
 }
 
 void updateWindowSize(void) {
@@ -1442,7 +1426,7 @@ int main(int argc, char **argv) {
     editorOpen(argv[1]);
     enableRawMode(STDIN_FILENO);
     editorSetStatusMessage(
-        "HELP: Ctrl-S (^S):Save | ^Q:quit | ^F:find | ^K:Cut Line | ^U: Uncut");
+        "HELP: Ctrl-S (^S):Save | ^X:quit | ^F:find | ^K:Cut Line | ^U: Uncut");
     while(1) {
         editorRefreshScreen();
         editorProcessKeypress(STDIN_FILENO);

@@ -5,13 +5,13 @@ Usage: kilo `<filename>`
 
 Keys:
 
-    CTRL-X: Quit (asks to save)
+    CTRL-X: Quit (asks to save) (also CTRL-Q)
     CTRL-S: Save (also CTRL-O)
-    CTRL-Q: Quit
     CTRL-F: Find string in file (ESC to exit search, arrows to navigate) (also CTRL-W)
     CTRL-K: Cut line(s) to cutbuffer
     CTRL-U: Uncut
     CTRL-E: Erase line
+    CTRL-L: Redraw screen
 
 Kilo does not depend on any library (not even curses). It uses fairly standard
 VT100 (and similar terminals) escape sequences. 
