@@ -91,6 +91,7 @@ typedef struct erow {
 
 struct editorConfig {
     int cx,cy;  /* Cursor x and y position in characters */
+    int vsx;    /* Visual X preferred column position */
     int rowoff;     /* Offset of row displayed. */
     int coloff;     /* Offset of column display.. */
     int screenrows; /* Number of rows that we can show */
@@ -707,6 +708,7 @@ void editorInsertChar(int c) {
     row = &E.row[filerow];
     editorRowInsertChar(filerow,filecol,c);
     E.cx++;
+    E.vsx = -1;
     E.dirty++;
 }
 
@@ -747,6 +749,7 @@ fixcursor:
         E.cy++;
     }
     E.cx = 0;
+    E.vsx = 0;
     E.coloff = 0;
 }
 
@@ -774,6 +777,7 @@ void editorDelChar(void) {
         editorRowDelChar(filerow,filecol-1);
         E.cx--;
     }
+    E.vsx = -1;
     if (row) editorUpdateRow(filerow);
     E.dirty++;
 }
@@ -889,15 +893,18 @@ int editorSave(void) {
 
 /* ============================= Terminal update ============================ */
 
+int editorLineXcolSz(int filerow, int cx, int scx) {
+    erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
+    int a = row ? 1 : 0;
+    int rsz = row ? row->size : 0;
+    if ((cx < rsz)&&(row->chars[cx] == TAB)) a += (TAB_SIZE-1)-((scx)%TAB_SIZE);
+    return a;
+}
+
 int editorLineXtoScrX(int filerow, int lx) {
     int scx = 0;
-    erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
-    if (row) {
-    	if (lx == -1) lx = row->size;
-        for (int j = 0; j < lx; j++) {
-            if (j < row->size && row->chars[j] == TAB) scx += (TAB_SIZE-1)-((scx)%TAB_SIZE);
-            scx++;
-        }
+    for (int j = 0; j < lx; j++) {
+        scx += editorLineXcolSz(filerow, j, scx);
     }
     return scx;
 }
@@ -916,7 +923,9 @@ void editorRefreshScreen(void) {
     /* Scroll E.coloff so E.cx is visible. */
     /* This way this code is only in once place, and nobody
      * else needs to really care. */
-    int scrx = editorLineXtoScrX(E.rowoff+E.cy, E.cx) - E.coloff;
+    int bvsx =  editorLineXtoScrX(E.rowoff+E.cy, E.cx);
+    int scrx = bvsx - E.coloff;
+    if (E.vsx < 0) E.vsx = bvsx;
     if (scrx<0) {
     	E.coloff += scrx;
     	screenSetDirty(E.cy,0);
@@ -1037,7 +1046,7 @@ void editorRefreshScreen(void) {
     /* Put cursor at its current position. Note that the horizontal position
      * at which the cursor is displayed may be different compared to 'E.cx'
      * because of TABs. */
-    int cx = editorLineXtoScrX(E.cy+E.rowoff, E.cx) - E.coloff;
+    int cx = bvsx - E.coloff;
     snprintf(buf,sizeof(buf),"\x1b[%d;%dH",E.cy+1,cx+1);
     abAppend(buf,strlen(buf));
     abAppend("\x1b[?25h",6); /* Show cursor. */
@@ -1061,17 +1070,17 @@ void editorSetStatusMessage(const char *fmt, ...) {
 
 #define KILO_QUERY_LEN 256
 void startOfLine(void) {
-     int filerow = E.rowoff + E.cy;
-     erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
-     if (row)
-         E.cx = 0;
- }
+    E.cx = 0;
+    E.vsx = 0;
+}
 
 void endOfLine(void) {
-  int filerow = E.rowoff + E.cy;
-  erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
-  if (row)
-    E.cx = row->size;
+    int filerow = E.rowoff + E.cy;
+    erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
+    if (row) {
+        E.cx = row->size;
+        E.vsx = -1;
+    }
 }
 
 void editorFind(int fd) {
@@ -1107,6 +1116,8 @@ void editorFind(int fd) {
             if (c == ESC) {
                 E.cx = saved_cx; E.cy = saved_cy;
                 E.coloff = saved_coloff; E.rowoff = saved_rowoff;
+            } else {
+                E.vsx = -1;
             }
             FIND_RESTORE_HL;
             editorSetStatusMessage("");
@@ -1182,6 +1193,7 @@ void editorMoveCursor(int key) {
         } else {
             E.cx -= 1;
         }
+        E.vsx = -1;
         break;
     case ARROW_RIGHT:
         if (row && E.cx < row->size) {
@@ -1197,6 +1209,7 @@ void editorMoveCursor(int key) {
                 E.cy += 1;
             }
         }
+        E.vsx = -1;
         break;
     case ARROW_UP:
         if (E.cy == 0) {
@@ -1228,6 +1241,7 @@ void editorMoveCursor(int key) {
         break;
     case PAGE_UP:
     case PAGE_DOWN:
+        E.vsx = -1;
         E.cx = 0;
         E.cy = 0;
         E.coloff = 0;
@@ -1237,13 +1251,21 @@ void editorMoveCursor(int key) {
         screenSetDirty(0,1);
         break;
     }
+
     /* Fix cx if the current line has not enough chars. */
-    /* TODO: This fucks up with tabs, but we'll live for now. */
     filerow = E.rowoff+E.cy;
     row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
     rowlen = row ? row->size : 0;
     if (E.cx > rowlen) E.cx = rowlen;
 
+    /* Find the appropriate E.cx based on the hoped column E.vsx */
+    if (E.vsx >= 0) {
+        int scx=0;
+        for (E.cx = 0;E.cx < rowlen;E.cx++) {
+            scx += editorLineXcolSz(filerow, E.cx, scx);
+            if (scx > E.vsx) break;
+        }
+    }
 }
 
 /* Process events arriving from the standard input, which is, the user
