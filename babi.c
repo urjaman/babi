@@ -1,5 +1,5 @@
-/* Kilo -- A very simple editor. Does not depend on libcurses, directly emits VT100
- *         escapes on the terminal.
+/* Babi -- A very simple editor. Does not depend on libcurses, directly
+ *         emits VT100escapes on the terminal.
  *
  * -----------------------------------------------------------------------
  *
@@ -32,7 +32,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define KILO_VERSION "0.B.1"
+#define BABI_VERSION "0.2"
 
 #define _BSD_SOURCE
 #define _GNU_SOURCE
@@ -58,7 +58,7 @@
 
 #define TAB_SIZE 8
 
-/* Syntax highlight types */
+/* Syntax highlight type */
 #define HL_NORMAL 0
 #define HL_COMMENT 2   /* Single line comment. */
 #define HL_MLCOMMENT 3 /* Multi-line comment. */
@@ -240,7 +240,7 @@ int emergencySave(void) {
     if (E.dirty) {
     	if (!E.tmpbuf) return -1;
     	strcpy(E.tmpbuf, E.filename); /* If you opened a >NAME_MAX file, sorry. */
-    	strcat(E.tmpbuf, ".kilo_save");
+    	strcat(E.tmpbuf, ".babi_save");
     	return saveFile(E.tmpbuf, 0600);
     }
     return 0;
@@ -1073,7 +1073,7 @@ void editorSetStatusMessage(const char *fmt, ...) {
 
 /* =============================== Find mode ================================ */
 
-#define KILO_QUERY_LEN 256
+#define QUERY_LEN 256
 void startOfLine(void) {
     E.cx = 0;
     E.vsx = 0;
@@ -1089,7 +1089,7 @@ void endOfLine(void) {
 }
 
 void editorFind(int fd) {
-    char query[KILO_QUERY_LEN+1] = {0};
+    char query[QUERY_LEN+1] = {0};
     int qlen = 0;
     int last_match = -1; /* Last line where a match was found. -1 for none. */
     int find_next = 0; /* if 1 search next, if -1 search prev. */
@@ -1132,7 +1132,7 @@ void editorFind(int fd) {
         } else if (c == ARROW_LEFT || c == ARROW_UP) {
             find_next = -1;
         } else if (isprint(c)) {
-            if (qlen < KILO_QUERY_LEN) {
+            if (qlen < QUERY_LEN) {
                 query[qlen++] = c;
                 query[qlen] = '\0';
                 last_match = -1;
@@ -1395,7 +1395,7 @@ void initEditor(void) {
 
 int main(int argc, char **argv) {
     if ((argc != 2)||(argv[1][0] == '-')) {
-        fprintf(stderr,"kilo " KILO_VERSION "\nUsage: %s <filename>\n", argv[0]);
+        fprintf(stderr,"babi " BABI_VERSION "\nUsage: %s <filename>\n", argv[0]);
         exit(1);
     }
 

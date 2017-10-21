@@ -1,9 +1,9 @@
 CC ?= gcc
 
-all: kilo
+all: babi
 
-kilo: kilo.c
-	$(CC) -Os -pipe -g $(CFLAGS) -o kilo kilo.c -Wall -W -pedantic -std=c99 -fwhole-program
+babi: babi.c
+	$(CC) -Os -pipe -g $(CFLAGS) -o babi babi.c -Wall -W -pedantic -std=c99 -fwhole-program
 
 clean:
-	rm kilo
+	rm babi

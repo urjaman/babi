@@ -1,7 +1,7 @@
-Kilo
+Babi
 ===
 
-Usage: kilo `<filename>`
+Usage: babi `<filename>`
 
 Keys:
 
@@ -13,16 +13,18 @@ Keys:
     CTRL-E: Erase line
     CTRL-L: Redraw screen
 
-Kilo does not depend on any library (not even curses). It uses fairly standard
+Babi does not depend on any library (not even curses). It uses fairly standard
 VT100 (and similar terminals) escape sequences. 
 
-Kilo was originally written by Salvatore Sanfilippo aka antirez and is released
+Babi was originally written as kilo by Salvatore Sanfilippo aka antirez and is released
 under the BSD 2 clause license.
-This fork was heavily modified by Urja Rannikko.
 
-## This forked kilo
+## This fork
 
-My point is to make kilo into a very small nano-like editor, for small embedded
+This fork was heavily modified by Urja Rannikko. The name is because that's
+what i often typo nano as, and it sounds kinda cute and small.
+
+My point is to make babi into a very small nano-like editor, for small embedded
 device usage (maybe get it embedded into busybox at some point?)
 
 DONE:
@@ -33,7 +35,7 @@ DONE:
 - CTRL-W to find
 - nano-compatible keybindings (CTRL-X to save and quit, CTRL-O to save)
 - improved save routine (doesnt need heap)
-- attempt to save on crashy exits 
+- attempt to save on crashy exits (into <filename>.babi_save)
 - improved out of memory handling
 - shell script syntax highlighting (shell scripts are what you're mostly editing on BusyBox systems anyways)
 
