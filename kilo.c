@@ -816,7 +816,6 @@ void editorDelChar(void) {
 int editorOpen(char *filename) {
     FILE *fp;
 
-    E.dirty = 0;
     free(E.filename);
     if (!(E.filename = strdup(filename))) oomeExit();
 
@@ -1313,6 +1312,9 @@ void editorProcessKeypress(int fd) {
             }
             if ((c == 'y')||(c=='Y')) {
                 if (editorSave()) return; /* Failed save aborts. */
+                /* Display the success message. */
+                editorRefreshScreen();
+                sleep(1);
                 break;
             }
             if ((c == 'n')||(c == 'N')) {
