@@ -35,9 +35,9 @@ DONE:
 - improved save routine (doesnt need heap)
 - attempt to save on crashy exits 
 - improved out of memory handling
+- shell script syntax highlighting (shell scripts are what you're mostly editing on BusyBox systems anyways)
 
 TODO:
-- shell script syntax highlighting (shell scripts are what you're mostly editing on BusyBox systems anyways)
 - BusyBoxy feature configuration:
   - syntax highlighting
     - C
