@@ -895,7 +895,7 @@ int editorLineXtoScrX(int filerow, int lx) {
     if (row) {
     	if (lx == -1) lx = row->size;
         for (int j = 0; j < lx; j++) {
-            if (j < row->size && row->chars[j] == TAB) scx += (TAB_SIZE-1)-((scx+1)%TAB_SIZE);
+            if (j < row->size && row->chars[j] == TAB) scx += (TAB_SIZE-1)-((scx)%TAB_SIZE);
             scx++;
         }
     }
@@ -968,7 +968,7 @@ void editorRefreshScreen(void) {
                     uint8_t c_cnt = 1;
                     if (c_out == TAB) {
                     	c_out = ' ';
-                    	c_cnt = (TAB_SIZE)-((scrx+1)%TAB_SIZE);
+                    	c_cnt = (TAB_SIZE)-((scrx)%TAB_SIZE);
                     }
                     do {
                     	if ((scrx-coff) >= E.screencols) break;
