@@ -4,6 +4,7 @@ Kilo
 Usage: kilo `<filename>`
 
 Keys:
+
     CTRL-X: Quit (asks to save)
     CTRL-S: Save (also CTRL-O)
     CTRL-Q: Quit
