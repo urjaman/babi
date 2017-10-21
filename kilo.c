@@ -1219,6 +1219,11 @@ void editorMoveCursor(int key) {
             if (filerow > 0) {
                 E.cy--;
                 E.cx = E.row[filerow-1].size;
+                if (E.cy < 0) {
+                    E.cy = 0;
+                    E.rowoff--;
+                    screenSetDirty(0, 1);
+                }
             }
         } else {
             E.cx -= 1;
