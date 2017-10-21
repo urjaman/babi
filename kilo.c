@@ -970,31 +970,17 @@ void editorRefreshScreen(void) {
         for (y = 0; y < E.screenrows; y++) {
             int filerow = E.rowoff+y;
 
-            if (filerow >= E.numrows) {
-                if (E.numrows == 0 && y == E.screenrows/3) {
-                    char welcome[80];
-                    int welcomelen = snprintf(welcome,sizeof(welcome),
-                        "Kilo editor -- version %s\x1b[0K\r\n", KILO_VERSION);
-                    int padding = (E.screencols-welcomelen)/2;
-                    if (padding) {
-                        abAppend("~",1);
-                        padding--;
-                    }
-                    while(padding--) abAppend(" ",1);
-                    abAppend(welcome,welcomelen);
-                } else {
-                    abAppend("~\x1b[0K\r\n",7);
-                }
-                continue;
-            }
-            /* For now we ignore the above part since those are short anyways. */
             if (!E.screendirty[y]) {
                 abAppend("\r\n",2);
                 continue;
             }
 
-            r = &E.row[filerow];
+            if (filerow >= E.numrows) {
+                abAppend("~\x1b[0K\r\n",7);
+                continue;
+            }
 
+            r = &E.row[filerow];
             int len = r->size;
             int current_color = -1;
             if (len > 0) {
@@ -1417,7 +1403,7 @@ void initEditor(void) {
 
 int main(int argc, char **argv) {
     if ((argc != 2)||(argv[1][0] == '-')) {
-        fprintf(stderr,"Usage: kilo <filename>\n");
+        fprintf(stderr,"kilo " KILO_VERSION "\nUsage: %s <filename>\n", argv[0]);
         exit(1);
     }
 
