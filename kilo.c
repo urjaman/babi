@@ -393,16 +393,6 @@ int is_separator(int c) {
     return c == '\0' || isspace(c) || strchr(",.()+-/*=~%[];",c) != NULL;
 }
 
-/* Return true if the specified row last char is part of a multi line comment
- * that starts at this row or at one before, and does not end at the end
- * of the row but spawns to the next row. */
-int editorRowHasOpenComment(erow *row) {
-    if (row->hl && row->size && row->hl[row->size-1] == HL_MLCOMMENT &&
-        (row->size < 2 || (row->chars[row->size-2] != '*' ||
-                            row->chars[row->size-1] != '/'))) return 1;
-    return 0;
-}
-
 /* Set every byte of row->hl (that corresponds to every character in the line)
  * to the right syntax highlight type (HL_* defines). */
 void editorUpdateSyntax(int filerow) {
@@ -433,7 +423,7 @@ void editorUpdateSyntax(int filerow) {
 
     /* If the previous line has an open comment, this line starts
      * with an open comment state. */
-    if (filerow > 0 && editorRowHasOpenComment(&E.row[filerow-1]))
+    if (filerow > 0 && E.row[filerow-1].hl_oc)
         in_comment = 1;
 
     while(*p) {
@@ -538,7 +528,7 @@ void editorUpdateSyntax(int filerow) {
      * state changed. This may recursively affect all the following rows
      * in the file, so atleast make it tail-callable... */
     int prev_oc = row->hl_oc;
-    row->hl_oc = editorRowHasOpenComment(row);
+    row->hl_oc = in_comment;
     if (row->hl_oc != prev_oc && filerow+1 < E.numrows)
         editorUpdateSyntax(filerow+1);
 }
