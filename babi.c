@@ -1,5 +1,5 @@
 /* Babi -- A very simple editor. Does not depend on libcurses, directly
- *         emits VT100escapes on the terminal.
+ *         emits VT100 escapes on the terminal.
  *
  * -----------------------------------------------------------------------
  *
@@ -56,7 +56,15 @@
 #include <unistd.h>
 #include <stdint.h>
 
+/* Feature configuration */
+#define ENABLE_FEATURE_BABI_SYNTAX_C 1
+#define ENABLE_FEATURE_BABI_SYNTAX_SH 1
+#define ENABLE_FEATURE_BABI_SEARCH 1
+#define ENABLE_FEATURE_BABI_CUT 1
+
 #define TAB_SIZE 8
+
+#define ENABLE_SYNTAX (ENABLE_FEATURE_BABI_SYNTAX_C || ENABLE_FEATURE_BABI_SYNTAX_SH)
 
 /* Syntax highlight type */
 #define HL_NORMAL 0
@@ -84,9 +92,11 @@ struct editorSyntax {
 typedef struct erow {
     int size;           /* Size of the row, excluding the null term. */
     char *chars;        /* Row content. */
+#if ENABLE_SYNTAX
     unsigned char *hl;  /* Syntax highlight type for each character in chars.*/
     int hl_oc;          /* Row had open comment at end in last syntax highlight
                            check. */
+#endif
 } erow;
 
 struct editorConfig {
@@ -105,15 +115,20 @@ struct editorConfig {
     char statusmsg[80];
     time_t statusmsg_time;
     const struct editorSyntax *syntax;    /* Current syntax highlight, or NULL. */
+#if ENABLE_FEATURE_BABI_CUT
     char **cutbuf; /* The rows in cut buffer */
     int cutcnt; /* Number of rows in cut buffer */
     int cutrow; /* "Source" of the rows cut. */
+#endif
     char *tmpbuf; /* A temporary buffer, for temporary things. */
     int tmpused; /* Amount of stuff in temporary buffer */
     int tmpsize; /* Size of the temporary buffer */
+    struct termios orig_termios; /* In order to restore at exit.*/
 };
 
-static struct editorConfig E;
+static struct editorConfig *Ep;
+
+#define E (*Ep)
 
 enum KEY_ACTION {
         CTRL_C = 3,         /* Ctrl-c */
@@ -148,6 +163,7 @@ enum KEY_ACTION {
 
 void editorSetStatusMessage(const char *fmt, ...);
 
+#if ENABLE_SYNTAX
 /* =========================== Syntax highlights DB =========================
  *
  * In order to add a new syntax, define two arrays with a list of file name
@@ -170,6 +186,7 @@ void editorSetStatusMessage(const char *fmt, ...);
  * There is no support to highlight patterns currently. */
 
 /* C / C++ */
+#if ENABLE_FEATURE_BABI_SYNTAX_C
 const char * const C_HL_extensions[] = {".c",".cpp",NULL};
 const char * const C_HL_keywords[] = {
         /* A few C / C++ keywords */
@@ -179,7 +196,9 @@ const char * const C_HL_keywords[] = {
         "int|","long|","double|","float|","char|","unsigned|","signed|",
         "void|","const|",NULL
 };
+#endif
 
+#if ENABLE_FEATURE_BABI_SYNTAX_SH
 /* shell */
 const char * const SH_HL_extensions[] = {".sh", NULL};
 const char * const SH_HL_keywords[] = {
@@ -189,25 +208,32 @@ const char * const SH_HL_keywords[] = {
     "until", "[", "]", "[[", "]]", "{", "}",
     "return|", "exit|", "shift|","exec|", NULL
 };
+#endif
 
 /* Here we define an array of syntax highlights by extensions, keywords,
  * comments delimiters and flags. */
 const struct editorSyntax HLDB[] = {
-    {   /* C / C++ */
-        C_HL_extensions,
-        C_HL_keywords,
-        "//","/*","*/",
-        HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_NUMBERS
-    },
+#if ENABLE_FEATURE_BABI_SYNTAX_SH
     {   /* shell */
         SH_HL_extensions,
         SH_HL_keywords,
         "#", "", "",
         HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_NUMBERS
+    },
+#endif
+#if ENABLE_FEATURE_BABI_SYNTAX_C
+    {   /* C / C++ */
+        C_HL_extensions,
+        C_HL_keywords,
+        "//","/*","*/",
+        HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_NUMBERS
     }
+#endif
 };
 
 #define HLDB_ENTRIES (sizeof(HLDB)/sizeof(HLDB[0]))
+
+#endif /* ENABLE_SYNTAX */
 
 /* ============================= Robust write() ============================= */
 
@@ -237,7 +263,7 @@ void wmsg(const char *msg) {
 }
 
 int emergencySave(void) {
-    if (E.dirty) {
+    if ((Ep)&&(E.dirty)) {
     	if (!E.tmpbuf) return -1;
     	strcpy(E.tmpbuf, E.filename); /* If you opened a >NAME_MAX file, sorry. */
     	strcat(E.tmpbuf, ".babi_save");
@@ -264,11 +290,9 @@ void crashExit(int unused __attribute__((unused))) {
 
 /* ======================= Low level terminal handling ====================== */
 
-static struct termios orig_termios; /* In order to restore at exit.*/
-
 void disableRawMode(int fd) {
     /* Don't even check the return value as it's too late. */
-    tcsetattr(fd,TCSAFLUSH,&orig_termios);
+    tcsetattr(fd,TCSAFLUSH,&E.orig_termios);
 }
 
 /* Called at exit to avoid remaining in raw mode. */
@@ -282,9 +306,9 @@ int enableRawMode(int fd) {
 
     if (!isatty(STDIN_FILENO)) goto fatal;
     atexit(editorAtExit);
-    if (tcgetattr(fd,&orig_termios) == -1) goto fatal;
+    if (tcgetattr(fd,&E.orig_termios) == -1) goto fatal;
 
-    raw = orig_termios;  /* modify the original mode */
+    raw = E.orig_termios;  /* modify the original mode */
     /* input modes: no break, no CR to NL, no parity check, no strip char,
      * no start/stop output control. */
     raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
@@ -388,7 +412,7 @@ void screenSetDirty(int st, int to_end) {
 }
 
 /* ====================== Syntax highlight color scheme  ==================== */
-
+#if ENABLE_SYNTAX
 int is_separator(int c) {
     return c == '\0' || isspace(c) || strchr(",.()+-/*=~%[];",c) != NULL;
 }
@@ -567,8 +591,10 @@ void editorSelectSyntaxHighlight(char *filename) {
     }
 }
 
+
 /* Called by the open function with the first line to check for a shell script shebang. */
 void editorCheckShebang(const char *line) {
+#if ENABLE_FEATURE_BABI_SYNTAX_SH
     /* Test if this looks like a shell script. */
     if (strncmp(line,"#!/",3)) return;
     const char *e = strstr(line, " ");
@@ -576,17 +602,23 @@ void editorCheckShebang(const char *line) {
     e = e - 2;
     if (strncmp(e,"sh",2)) return;
     /* Yup, #!/...sh looks like a shell script :P */
-    E.syntax = HLDB+1; /* shell */
+    E.syntax = HLDB+0; /* shell */
+#else
+   (void)line;
+#endif
 }
 
-
+#endif /* ENABLE_SYNTAX */
 
 /* ======================= Editor rows implementation ======================= */
 
 /* Update, well, things about a row, but for now syntax. */
 void editorUpdateRow(int filerow) {
+    screenSetDirty(filerow-E.rowoff, 0);
+#if ENABLE_SYNTAX
     /* Update the syntax highlighting attributes of the row. */
     editorUpdateSyntax(filerow);
+#endif
 }
 
 /* Insert a row at the specified position, shifting the other rows on the bottom
@@ -601,8 +633,10 @@ void editorInsertRow(int at, char *s, size_t len) {
     E.numrows++;
     screenSetDirty(at-E.rowoff, 1);
     E.row[at].size = len;
+#if ENABLE_SYNTAX
     E.row[at].hl = NULL;
     E.row[at].hl_oc = 0;
+#endif
     if (!(E.row[at].chars = malloc(len+1))) oomeExit();
     memcpy(E.row[at].chars,s,len+1);
     editorUpdateRow(at);
@@ -611,7 +645,9 @@ void editorInsertRow(int at, char *s, size_t len) {
 /* Free row's heap allocated stuff. */
 void editorFreeRow(erow *row) {
     free(row->chars);
+#if ENABLE_SYNTAX
     free(row->hl);
+#endif
 }
 
 /* Remove the row at the specified position, shifting the remainign on the
@@ -628,6 +664,7 @@ void editorDelRow(int at) {
     screenSetDirty(at-E.rowoff, 1);
 }
 
+#if ENABLE_FEATURE_BABI_CUT
 void editorCutRow(int at) {
     erow * row;
 
@@ -660,6 +697,7 @@ void editorUncutRows(int at) {
     }
     screenSetDirty(scrl>0 ? 0 : E.cy-E.cutcnt, 1);
 }
+#endif
 
 /* Insert a character at the specified position in a row, moving the remaining
  * chars on the right if needed. */
@@ -824,7 +862,9 @@ int editorOpen(char *filename) {
     while((linelen = getline(&line,&linecap,fp)) != -1) {
         if (linelen && (line[linelen-1] == '\n' || line[linelen-1] == '\r'))
             line[--linelen] = '\0';
+#if ENABLE_SYNTAX
         if (linelen && E.numrows==0) editorCheckShebang(line);
+#endif
         editorInsertRow(E.numrows,line,linelen);
     }
     free(line);
@@ -971,10 +1011,14 @@ void editorRefreshScreen(void) {
 
             r = &E.row[filerow];
             int len = r->size;
+#if ENABLE_SYNTAX
             int current_color = -1;
+#endif
             if (len > 0) {
                 char *c = r->chars;
+#if ENABLE_SYNTAX
                 unsigned char *hl = r->hl;
+#endif
                 int scrx = 0;
                 int coff = (y == E.cy) ? E.coloff : 0;
                 for (int j = 0; j < len; j++) {
@@ -996,6 +1040,7 @@ void editorRefreshScreen(void) {
                                 sym = '?';
                             abAppend(&sym,1);
                             abAppend("\x1b[0m",4);
+#if ENABLE_SYNTAX
                         } else if (hl[j] == HL_NORMAL) {
                             if (current_color != -1) {
                                 abAppend("\x1b[39m",5);
@@ -1010,6 +1055,9 @@ void editorRefreshScreen(void) {
                                 current_color = color;
                                 abAppend(buf,clen);
                             }
+#else
+			} else {
+#endif
                             abAppend(&c_out,1);
                         }
                     } while (scrx++,--c_cnt);
@@ -1088,11 +1136,13 @@ void endOfLine(void) {
     }
 }
 
+#if ENABLE_FEATURE_BABI_SEARCH
 void editorFind(int fd) {
     char query[QUERY_LEN+1] = {0};
     int qlen = 0;
     int last_match = -1; /* Last line where a match was found. -1 for none. */
     int find_next = 0; /* if 1 search next, if -1 search prev. */
+#if ENABLE_SYNTAX
     int saved_hl_line = -1;  /* No saved HL */
     char *saved_hl = NULL;
 
@@ -1102,6 +1152,9 @@ void editorFind(int fd) {
         saved_hl = NULL; \
     } \
 } while (0)
+#else
+#define FIND_RESTORE_HL
+#endif
 
     /* Save the cursor position in order to restore it later. */
     int saved_cx = E.cx, saved_cy = E.cy;
@@ -1162,14 +1215,16 @@ void editorFind(int fd) {
             FIND_RESTORE_HL;
 
             if (match) {
-                erow *row = &E.row[current];
                 last_match = current;
+#if ENABLE_SYNTAX
+                erow *row = &E.row[current];
                 if (row->hl) {
                     saved_hl_line = current;
                     if (!(saved_hl = malloc(row->size+1))) oomeExit();
                     memcpy(saved_hl,row->hl,row->size);
                     memset(row->hl+match_offset,HL_MATCH,qlen);
                 }
+#endif
                 E.cy = 0;
                 E.cx = match_offset;
                 E.rowoff = current;
@@ -1179,6 +1234,7 @@ void editorFind(int fd) {
         }
     }
 }
+#endif
 
 /* ========================= Editor events handling  ======================== */
 
@@ -1315,10 +1371,14 @@ void editorProcessKeypress(int fd) {
         exit(0);
         break;
     case CTRL_K:
+#if ENABLE_FEATURE_BABI_CUT
         editorCutRow(E.rowoff + E.cy);
+#endif
         break;
     case CTRL_U:
+#if ENABLE_FEATURE_BABI_CUT
         editorUncutRows(E.rowoff + E.cy);
+#endif
         break;
     case CTRL_O:
     case CTRL_S:        /* Ctrl-s */
@@ -1326,7 +1386,9 @@ void editorProcessKeypress(int fd) {
         break;
     case CTRL_W:
     case CTRL_F:
+#if ENABLE_FEATURE_BABI_SEARCH
         editorFind(fd);
+#endif
         break;
     case BACKSPACE:     /* Backspace */
     case CTRL_H:        /* Ctrl-h */
@@ -1381,8 +1443,7 @@ void handleSigWinCh(int unused __attribute__((unused))) {
 }
 
 void initEditor(void) {
-    /* We're called only once and E is in .bss, dont bother zeroing things. */
-    /* If we end up being called more often, memset the struct to zero. */
+    if (!(Ep = calloc(1, sizeof(struct editorConfig)))) oomeExit();
     /* tmpbuf needs to be able to hold the emergency save filename, thus this default (usually 4096, which is plenty.) */
     const int tmpbuf_base = NAME_MAX;
     if (!(E.tmpbuf = malloc(tmpbuf_base))) oomeExit();
@@ -1400,11 +1461,20 @@ int main(int argc, char **argv) {
     }
 
     initEditor();
+#if ENABLE_SYNTAX
     editorSelectSyntaxHighlight(argv[1]);
+#endif
     editorOpen(argv[1]);
     enableRawMode(STDIN_FILENO);
     editorSetStatusMessage(
-        "HELP: Ctrl-S (^S):Save | ^X:quit | ^F:find | ^K:Cut Line | ^U: Uncut");
+        "HELP: Ctrl-S (^S):Save | ^X:quit"
+#if ENABLE_FEATURE_BABI_SEARCH
+        " | ^F:find"
+#endif
+#if ENABLE_FEATURE_BABI_CUT
+        " | ^K:Cut Line | ^U: Uncut"
+#endif
+    );
     while(1) {
         editorRefreshScreen();
         editorProcessKeypress(STDIN_FILENO);
